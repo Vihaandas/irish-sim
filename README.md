@@ -84,7 +84,22 @@ Turn the assists off for realistic practice.
   - The pool-noodle bumpers are recoloured for the alliance. Their outline is the collision box.
   - The REF FUEL in the CAD hopper are the slots where carried FUEL are drawn.
 - **Drive:**
-  - 4 CIM, Toughbox Mini 8.45:1, 6 in HiGrip, 16.5 ft/s free, 50 A per motor.
+  - 4 CIM, Toughbox Mini, 6 in HiGrip. The CAD gearbox is 14T:50T then 16T:48T = **10.71:1** (earlier notes said 8.45:1). That is 13.0 ft/s free speed.
+  - 40 A current limit per CIM, a 0.15 s open-loop ramp and battery sag (12.5 V minus 0.018 ohm times current).
+  - **Calibrated** (tools/drive_test.js) to AndyMark's published 10.0 ft/s loaded speed for this setup. The effective turning track width is about 1.6x the physical one, as WPILib describes for high-grip wheels.
+
+    | Test | Before calibration | Now |
+    |---|---|---|
+    | Top speed | 16.3 ft/s | 10.2 ft/s |
+    | 0 to 90% speed | 0.99 s | 0.80 s |
+    | 10 ft / 20 ft sprint | 1.10 s / 1.73 s | 1.37 s / 2.36 s |
+    | Spin in place, full stick | 627 deg/s | 356 deg/s |
+    | Spin in place, 65% stick (default) | 342 deg/s | 205 deg/s |
+    | 180 deg turn at 65% stick | 1.17 s | 1.36 s |
+    | Turn radius at full speed, half turn stick | 34 ft | 5.7 ft |
+    | Stop from top speed | 7.6 ft | 2.7 ft |
+
+  - Wheel scrub acts like a tire: it is strongest turning in place and fades as the robot rolls forward, so steering at speed responds.
   - 131.9 lb on the field: 103.8 lb CAD, plus wire, battery and bumpers.
   - Tank drive: wheels resist sideways pushing, and turning has drop-center scrub.
 - **Height:** 21.5 in, so it fits under the TRENCH. A deployed intake jams against the BUMP ramp, so stow it before crossing.

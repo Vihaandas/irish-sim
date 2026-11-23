@@ -11,8 +11,11 @@ const IRISH = {
   bumper: { x: 18.75, y0: -3.231, y1: 35.56, zTop: 7.5 },
   frame: { L: 32.31, W: 31.0 },
   topIn: 21.5,                       // deployed top 21.5 in (backstop), under the 22.25 in TRENCH arm
-  // drivetrain: AndyMark AM14U5, 4 CIM, Toughbox Mini 8.45:1, 6 in HiGrip -> 16.5 ft/s free (report/test_data.json)
-  drive: { motorsPerSide: 2, Ts: 2.41, Is: 131, wf: 5330 * 2 * Math.PI / 60, G: 8.45, r: 3 * IN, track: 26.6 * IN, wheelbase: 25.1 * IN, Ilim: 50, eff: 0.85, mu: 1.05 },
+  // drivetrain: AndyMark AM14U5, 4 CIM, Toughbox Mini. The CAD gearbox is 14T:50T then 16T:48T = 10.71:1 (not 8.45:1),
+  // 6 in HiGrip: 13.0 ft/s free; AndyMark's user guide quotes 10.0 ft/s loaded for this exact setup.
+  // cv / scrub are calibrated by tools/drive_test.js (see README: drive calibration).
+  drive: { motorsPerSide: 2, Ts: 2.41, Is: 131, wf: 5310 * 2 * Math.PI / 60, G: 10.71, r: 3 * IN, track: 26.6 * IN, wheelbase: 25.1 * IN, Ilim: 40, eff: 0.85, mu: 1.05,
+    cv: 24, scrub: 0.40, slipSat: 0.30, ramp: 0.15, Rbat: 0.018 },
   // intake: team 22 in module on IN-70 pivot arms, pivot (Y 31.0, Z 8.8), folds 132.5 deg (CAD), deploy NEO + MAXPlanetary 25:1
   intake: { pivotY: 31.0, pivotZ: 8.8, stowDeg: 132.5, tipY: 44.19, deployTime: 0.35, transit: 0.47, minApproach: 0.76, slowCaptureRate: 3.0 },
   // passive ramp hopper (analysis/sim_hopper.js): 10 FUEL drain in 6.17 s = 1.53 FUEL/s; ~2-3 preload with the arm folded
@@ -106,7 +109,7 @@ function genericSpec(level) {
   const s = { easy: 0.8, normal: 1.0, hard: 1.12 }[level] || 1;
   return {
     name: 'AI', massLb: 115, mass: 115 * LB, hl: 18 * IN, hw: 18 * IN, topIn: 20,
-    drive: { motorsPerSide: 2, Ts: 2.41, Is: 131, wf: 5330 * 2 * Math.PI / 60, G: 10.71 / s, r: 3 * IN, track: 23 * IN, wheelbase: 20 * IN, Ilim: 50, eff: 0.85, mu: 1.0 },
+    drive: { motorsPerSide: 2, Ts: 2.41, Is: 131, wf: 5310 * 2 * Math.PI / 60, G: 10.71 / s, r: 3 * IN, track: 23 * IN, wheelbase: 20 * IN, Ilim: 40, eff: 0.85, mu: 1.0, cv: 22, scrub: 0.38, slipSat: 0.30, ramp: 0.15, Rbat: 0.018 },
     ai: { level, capacity: 8, preload: 8, rate: { easy: 1.2, normal: 1.8, hard: 3.2 }[level] || 1.8, sigma: { easy: 0.07, normal: 0.045, hard: 0.02 }[level] || 0.045,
       exitH: 0.55, angle: 58 * DEG, intakeHalfW: 0.36 },
   };
@@ -154,19 +157,27 @@ class Robot {
     const d = this.spec.drive, m = this.mass;
     const fx = this.fx, fz = this.fz, rx = -fz, rz = fx;
     let vf = this.vx * fx + this.vz * fz, vr = this.vx * rx + this.vz * rz;
-    const T = d.track, uL = enabled ? clamp(this.cmd.l, -1, 1) : 0, uR = enabled ? clamp(this.cmd.r, -1, 1) : 0;
+    const T = d.track;
+    // open-loop ramp on the motor controllers (what most robot code sets) and battery sag under load
+    const ramp = dt / (d.ramp || 0.001);
+    this.uL = approachVal(this.uL || 0, enabled ? clamp(this.cmd.l, -1, 1) : 0, ramp); this.uR = approachVal(this.uR || 0, enabled ? clamp(this.cmd.r, -1, 1) : 0, ramp);
+    const V = this.vbat === undefined ? 12.5 : this.vbat, Fmax = d.mu * m * GRAV / 2; let Itot = 0;
     const side = (v, u) => {
-      const wm = v / d.r * d.G; let I = d.Is * (u - wm / d.wf); I = clamp(I, -d.Ilim, d.Ilim);
-      let F = d.motorsPerSide * (d.Ts / d.Is) * I * d.G * d.eff / d.r; const Fmax = d.mu * m * GRAV / 2;
-      return clamp(F, -Fmax, Fmax);
+      const wm = v / d.r * d.G; let I = d.Is * (u * V / 12 - wm / d.wf); I = clamp(I, -d.Ilim, d.Ilim); Itot += Math.abs(I) * d.motorsPerSide;
+      // gearbox / carpet losses grow with speed (calibrated so full stick holds about 10 ft/s, like AndyMark's loaded figure)
+      return clamp(d.motorsPerSide * (d.Ts / d.Is) * I * d.G * d.eff / d.r - (d.cv || 0) * v, -Fmax, Fmax);
     };
     // disabled robots coast (no output); enabled robots in neutral brake
-    let FL = side(vf + this.w * T / 2, uL), FR = side(vf - this.w * T / 2, uR);
+    let FL = side(vf + this.w * T / 2, this.uL), FR = side(vf - this.w * T / 2, this.uR);
     if (!enabled) { FL = FR = 0; }
+    this.vbat = clamp(12.5 - (d.Rbat || 0) * (Itot + 4), 7, 12.5);
     const Frr = 0.02 * m * GRAV * Math.tanh(vf / 0.05) + (enabled ? 0 : 0.25 * m * GRAV * Math.tanh(vf / 0.2));
     let af = (FL + FR - Frr) / m - GRAV * Math.sin(this.pitch);
-    const scrub = 0.13 * m * GRAV * Math.tanh(this.w / 0.25) + (enabled ? 0 : 0.2 * m * GRAV * Math.tanh(this.w / 0.3));
-    const al = ((FL - FR) * T / 2 - scrub) / this.I;
+    // wheel scrub: the end wheels slide sideways when the robot rotates. Like a tire it saturates with slip angle,
+    // so it is strongest turning in place and much weaker when rolling forward (steering at speed stays responsive).
+    const arm = d.wheelbase / 2, slip = Math.abs(this.w) * arm / (Math.abs(vf) + 0.25);
+    const scrubT = Math.sign(this.w) * d.scrub * m * GRAV * arm * Math.tanh(slip / d.slipSat) + (enabled ? 0 : 0.2 * m * GRAV * 0.32 * Math.tanh(this.w / 0.3));
+    const al = ((FL - FR) * T / 2 - scrubT) / this.I;
     vf += af * dt; this.w += al * dt;
     // tank drive: wheels resist sideways motion
     const dv = Math.min(Math.abs(vr), 1.0 * GRAV * dt); vr -= Math.sign(vr) * dv;

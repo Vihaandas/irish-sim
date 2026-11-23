@@ -712,7 +712,7 @@
       ['CAD', `${h.parts || 940} Onshape parts; the ${h.intakeParts || 186}-part intake folds ${IRISH.intake.stowDeg}° on its real pivot`],
       ['Size', `AM14U5 ${IRISH.frame.L} x ${IRISH.frame.W} in frame; ${(2 * IRISH.hl / IN).toFixed(1)} x ${(2 * IRISH.hw / IN).toFixed(1)} in with noodle bumpers; ${IRISH.topIn} in tall`],
       ['Weight', `${IRISH.massLb.toFixed(0)} lb with battery and bumpers`],
-      ['Drive', '4 CIM, Toughbox Mini 8.45:1, 6 in HiGrip: 16.5 ft/s'],
+      ['Drive', '4 CIM, Toughbox Mini 10.71:1 (from the CAD gears), 6 in HiGrip: about 10 ft/s on the field, turns about 350°/s in place'],
       ['Intake', 'Team 22 in module on a NEO + 25:1 pivot; needs about 3 ft/s approach'],
       ['Hopper', 'Passive ramp: about 1.5 FUEL/s to the shooter; 3 FUEL preload'],
       ['Shooter', '2-wide drum, fixed 72° hood: 2,085 rpm at the HUB wall to 3,438 rpm at 10 ft'],

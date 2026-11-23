@@ -7,7 +7,6 @@ const DEFAULTS = {
   input: 'keyboard', assists: 'on', labels: true, volume: 0.7, arc: true, trail: true, fps: false,
 };
 const otherAlliance = a => a === 'blue' ? 'red' : 'blue';
-const approachVal = (v, t, step) => v < t ? Math.min(t, v + step) : Math.max(t, v - step);
 
 class Game {
   constructor(W) { this.W = W; }
@@ -349,7 +348,7 @@ function makeAuto(name) {
   const routines = {
     'none': [],
     'leave': [fwd(1.0)],
-    'shoot-leave': [spin, fwd(0.75), aim, shootAll()],
+    'shoot-leave': [spin, fwd(1.0), aim, shootAll()],
     'shoot-depot': [spin, fwd(0.75), aim, shootAll(4.5), goTo(2.2, CZ, { v: 0.75 }), goTo(0.95, CZ, { intake: true, v: 0.5, tol: 0.12 }), goTo(0.75, CZ - 0.45, { intake: true, v: 0.35 }), goTo(0.75, CZ + 0.45, { intake: true, v: 0.35 }), stow, goTo(5.4, CZ, { v: 0.8, tol: 0.1 }), aim, shootAll()],
   };
   const steps = (routines[name] || []).map(s => Object.assign(Object.create(s), {}));
