@@ -4,6 +4,25 @@
 
 A browser driver-practice simulator for IRISH 2026 BUILT. You drive the team's Rev F robot, built from the Onshape CAD, through a full match reconstructed from the IRISH game manual.
 
+## What's in it
+
+- **Modes:** full match (2:40), free practice (SHIFTS loop), a 60 s shooting drill (refills to 10 when empty) and a 90 s intake drill (40 FUEL scattered). Drills keep your best score in that browser.
+- **Practice tools:** R (L3) puts the robot back on the STARTING LINE. G (R3) loads 10 FUEL in free practice. M hides the minimap.
+- **Smooth motion:** physics runs at 120 Hz and the picture is drawn between physics steps, so motion stays smooth at any frame rate. Controller sticks are eased like the keys.
+- **Smooth intake (default):** the spinning pickup roller pulls FUEL that is up to 0.5 m in front of it toward the middle of the module, so you can sweep at any speed. The Robot settings still have the strict team-sim model, which needs about 3 ft/s.
+- **Shooting:**
+  - Shot trails follow your shots.
+  - A dashed aim arc shows where a shot would land right now, using the same physics as the FUEL. It turns green when the shot goes in.
+- **Sound (synthesized, no files):**
+  - Drive-motor whine that follows speed and effort, drum whine that follows rpm, and intake roller hum.
+  - FUEL thuds by impact speed and distance, the shot thump, pickup pops and score chimes.
+  - Crowd ambience that swells when you score, FRC-style start and end horns, shift horns, countdown ticks, a foul buzzer, collision clanks, the intake deploy whir and a jam clunk.
+  - Volume and mute are in Display & sound, plus a Sound button in the HUD.
+- **HUD:**
+  - A match timeline under the scoreboard. Swapped SHIFTS are striped, and a marker shows the current time.
+  - Tips during the countdown, a fullscreen button and an optional frame-rate counter.
+  - The game pauses itself if the window loses focus.
+
 ## Run it
 
 - Open `index.html` in Chrome or Edge. It needs internet the first time for Three.js (jsDelivr) and the fonts.
@@ -101,6 +120,7 @@ Turn the assists off for realistic practice.
 
 - `src/page.html` is the page body. `tools/build_page.js` writes `index.html` (stand-alone) and `page.html` (the published Artifact).
 - Graphics: ACES tone mapping, a reflection environment, PBR materials picked from the Onshape part colours, an arena with stands and live scoreboard screens, HUB light strips that show which alliance owns each side, score bursts and a guide arrow after zone swaps. Settings > Graphics has High / Medium / Fast.
+- `js/audio.js`: sound engine.
 - `js/core.js`: field and colliders. `js/robot.js`: robot specs and drive. `js/fuel.js`: FUEL physics. `js/game.js`: rules, autos and AI. `js/controls.js`: remappable bindings and the WPILib snippet. `js/main.js`: graphics, input and HUD.
 - `tools/build_mesh.js` turns the two Onshape glTF exports in `raw/` into `robot_mesh.js`. Re-export after a CAD change: GET `/api/v6/partstudios/d/{did}/w/{wid}/e/{eid}/gltf` from the signed-in Onshape tab, then run `node tools/build_mesh.js`.
 - `raw/*.gltf` are the 117 MB exports. They can be deleted once `robot_mesh.js` is built.

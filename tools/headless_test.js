@@ -101,3 +101,22 @@ vm.runInContext(`
   console.log('shot: through the drum for', flying && fired ? (flying - fired).toFixed(3) : '-', 's; scored', W.game.score.blue.teleFuel + W.game.score.red.teleFuel);
 }
 `, ctx);
+// 7) intake funnel: creep (1.5 ft/s) over a row of 6 FUEL spread across 30 in; smooth vs strict team-sim model
+vm.runInContext(`
+for (const model of ['smooth', 'cad']) {
+  const W = newWorld({ mode: 'practice', ai: 'off', assists: 'on', intakeModel: model }); const P = W.player; W.t = 23 + 25 + 1;
+  while (P.staged.length) P.staged.pop(); while (P.hopper.length) P.hopper.pop();
+  P.place(2.4, 2.0, 0); P.intakePos = P.intakeTarget = 0;
+  for (let k = 0; k < 6; k++) W.fuel.add(3.6 + k * 0.35, FUEL.r, 2.0 + (k - 2.5) * 0.13);
+  const inp = { l: 0.1, r: 0.1, intake: true, stow: false, outtake: false, shoot: false, prespin: false, preset: 3 };
+  for (let i = 0; i < 120 * 6; i++) step(W, DT, p => playerAssist(W, p, inp, DT));
+  console.log('funnel', model, ': picked up', P.stats.collected, 'of 6 at', (Math.hypot(P.vx, P.vz) / FT).toFixed(1), 'ft/s');
+}
+// 8) shooting drill: 60 s, assisted shooting from the spawn spot, refills
+{
+  const W = newWorld({ mode: 'drill-shoot', ai: 'off', assists: 'on' }); const P = W.player; let finished = false; W.onFinish = () => { finished = true; };
+  const inp = { l: 0, r: 0, intake: false, stow: false, outtake: false, shoot: true, prespin: false, preset: 3 };
+  for (let i = 0; i < 120 * 63 && !finished; i++) step(W, DT, p => playerAssist(W, p, inp, DT));
+  console.log('drill-shoot: finished', finished, 'shots', P.stats.shots, 'scored', W.game.score[P.alliance].teleFuel, 'balls in world', W.fuel.balls.length);
+}
+`, ctx);

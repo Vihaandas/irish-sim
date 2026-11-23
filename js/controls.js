@@ -17,6 +17,8 @@ const CONTROL_ACTIONS = [
   { id: 'preset2', label: 'RPM preset: 3 ft', hint: 'preset mode only', java: 'onTrue(shooter.usePresetGapFeet(3))' },
   { id: 'preset3', label: 'RPM preset: 6 ft', hint: 'preset mode only', java: 'onTrue(shooter.usePresetGapFeet(6))' },
   { id: 'preset4', label: 'RPM preset: 10 ft', hint: 'preset mode only', java: 'onTrue(shooter.usePresetGapFeet(10))' },
+  { id: 'reset', label: 'Reset robot to the line', hint: 'practice and drills', sim: true },
+  { id: 'refill', label: 'Load 10 FUEL', hint: 'free practice', sim: true },
   { id: 'camera', label: 'Change camera', sim: true },
   { id: 'pause', label: 'Pause', sim: true },
 ];
@@ -26,8 +28,8 @@ const CONTROL_AXES = [
   { id: 'right', label: 'Right side (tank only)', keys: 'I / K', prompt: 'Push the stick forward' },
 ];
 const DEFAULT_BINDS = {
-  keys: { shoot: ['Space'], intake: ['KeyE'], outtake: ['KeyQ'], slow: ['ShiftLeft'], stow: ['KeyX'], prespin: ['KeyF'], preset1: ['Digit1'], preset2: ['Digit2'], preset3: ['Digit3'], preset4: ['Digit4'], camera: ['KeyC'], pause: ['Escape'] },
-  pad: { shoot: { b: 7 }, intake: { b: 6 }, outtake: { b: 1 }, slow: { b: 4 }, stow: { b: 3 }, prespin: { b: 5 }, preset1: { b: 12 }, preset2: { b: 15 }, preset3: { b: 13 }, preset4: { b: 14 }, camera: { b: 8 }, pause: { b: 9 } },
+  keys: { shoot: ['Space'], intake: ['KeyE'], outtake: ['KeyQ'], slow: ['ShiftLeft'], stow: ['KeyX'], prespin: ['KeyF'], preset1: ['Digit1'], preset2: ['Digit2'], preset3: ['Digit3'], preset4: ['Digit4'], camera: ['KeyC'], pause: ['Escape'], reset: ['KeyR'], refill: ['KeyG'] },
+  pad: { shoot: { b: 7 }, intake: { b: 6 }, outtake: { b: 1 }, slow: { b: 4 }, stow: { b: 3 }, prespin: { b: 5 }, preset1: { b: 12 }, preset2: { b: 15 }, preset3: { b: 13 }, preset4: { b: 14 }, camera: { b: 8 }, pause: { b: 9 }, reset: { b: 10 }, refill: { b: 11 } },
   axes: { throttle: { a: 1, inv: true }, turn: { a: 2, inv: false }, right: { a: 3, inv: true } },
 };
 const BIND_KEY = 'irish-sim-binds-v2';

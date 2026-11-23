@@ -2,9 +2,9 @@
 'use strict';
 const DEFAULTS = {
   mode: 'match', alliance: 'blue', station: 1, start: 'center', ai: 'normal', defense: false,
-  drive: 'arcade', shotMode: 'vision', gate: true, intakeModel: 'cad', hopper: 'passive', noise: 'real',
+  drive: 'arcade', shotMode: 'vision', gate: true, intakeModel: 'smooth', hopper: 'passive', noise: 'real',
   auto: 'shoot-leave', camera: 'follow', turnScale: 0.65, fuelBonus: 60, sound: true, quality: 'high',
-  input: 'keyboard', assists: 'on', labels: true,
+  input: 'keyboard', assists: 'on', labels: true, volume: 0.7, arc: true, trail: true, fps: false,
 };
 const otherAlliance = a => a === 'blue' ? 'red' : 'blue';
 const approachVal = (v, t, step) => v < t ? Math.min(t, v + step) : Math.max(t, v - step);
@@ -37,11 +37,33 @@ class Game {
     for (const r of W.robots) { r.startedOnLine = obbTouchesXStrip(r.mainBox(), START_X[r.alliance] - TAPE / 2, START_X[r.alliance] + TAPE / 2); r.leftLine = false; r.crossedCenter = false; r.overT = 0; r.overCount = 0; }
     this.player = P;
     if (S.mode === 'practice') { W.t = MATCH.periods[2].t0; }
+    this.drill = S.mode.startsWith('drill') ? { kind: S.mode, len: S.mode === 'drill-shoot' ? 60 : 90, refillT: 0 } : null;
+    if (this.drill) {
+      W.t = 0; const s = mine === 'blue' ? 1 : -1;
+      if (this.drill.kind === 'drill-shoot') { P.place(CX - s * 2.9, CZ + 0.4, face(mine)); this.refillPlayer(10); }
+      else {
+        // 40 FUEL scattered over our half, away from the HUB and the BUMP
+        for (let k = 0; k < 40; k++) { let x, z; do { x = s > 0 ? 0.9 + Math.random() * (CX - 2.2) : FIELD.L - 0.9 - Math.random() * (CX - 2.2); z = 0.4 + Math.random() * (FIELD.W - 0.8); } while (Math.hypot(x - START_X[mine], z - P.z) < 0.9); W.fuel.add(x, FUEL.r, z); }
+      }
+    }
     this.autoRun = S.mode === 'match' ? makeAuto(S.auto) : null;
+  }
+  // practice tools: put the robot back on its STARTING LINE / load it with FUEL (reusing resting FUEL far away first)
+  resetPlayer() { const P = this.player; P.place(START_X[P.alliance], CZ, P.alliance === 'blue' ? 0 : Math.PI); P.intakeTarget = P.intakePos = 1; }
+  refillPlayer(n) {
+    const W = this.W, P = this.player, need = Math.max(0, n - P.count()); if (!need) return;
+    const spare = W.fuel.balls.filter(b => b.state === F_FIELD && b.y < 0.12 && Math.hypot(b.vx, b.vz) < 0.05 && Math.hypot(b.x - P.x, b.z - P.z) > 3).sort(() => Math.random() - 0.5);
+    for (let k = 0; k < need; k++) {
+      const b = spare.length && W.fuel.balls.length > 180 ? spare.pop() : W.fuel.add(P.x, 0.3, P.z);
+      b.state = F_HELD; b.owner = P; b.vx = b.vy = b.vz = 0; b.shooter = null;
+      const free = [0, 1].find(l => !P.staged.some(q => q.lane === l));
+      if (free !== undefined) { b.lane = free; P.staged.push(b); } else irishHopperAdd(P, b, 0, 21.4);
+    }
   }
   blankScore() { return { autoFuel: 0, teleFuel: 0, fuelPts: 0, leave: 0, park: 0, foulPts: 0, fouls: [], rp: {}, total: 0 }; }
   // ---- timeline ----
   period(t = this.W.t) {
+    if (this.drill) return t < this.drill.len ? { name: this.drill.kind === 'drill-shoot' ? 'SHOOTING DRILL' : 'INTAKE DRILL', t0: 0, t1: this.drill.len, swap: false, drill: true } : { name: 'DRILL OVER', t0: this.drill.len, t1: 1e9, swap: false, disabled: true, over: true };
     if (this.W.settings.mode === 'practice') { const k = Math.floor((t - 23) / 25); return { name: 'PRACTICE  SHIFT ' + (k + 1), t0: 23 + k * 25, t1: 23 + (k + 1) * 25, swap: k % 2 === 0, practice: true }; }
     for (const p of MATCH.periods) if (t < p.t1) return p;
     return { name: 'MATCH OVER', t0: MATCH.end, t1: 1e9, swap: false, disabled: true, over: true };
@@ -56,6 +78,7 @@ class Game {
   isAuto() { return this.W.settings.mode === 'match' && this.W.t < MATCH.auto; }
   clock() {
     const t = this.W.t;
+    if (this.drill) return Math.max(0, this.drill.len - t);
     if (this.W.settings.mode === 'practice') { const p = this.period(); return Math.max(0, p.t1 - t); }
     if (t < MATCH.auto) return MATCH.auto - t;
     if (t < MATCH.auto + MATCH.delay) return 0;
@@ -155,6 +178,11 @@ class Game {
         if (rb.stats.leave) this.score[rb.alliance].leave += POINTS.leave;
         if (rb.isPlayer) this.toast(rb.stats.leave ? 'LEAVE +3' : 'No LEAVE points (must be fully off the STARTING LINE)', rb.stats.leave ? 'good' : 'warn', 2.5);
       }
+    }
+    if (this.drill) {
+      if (t >= this.drill.len + 2 && !this.over) { this.over = true; W.onFinish && W.onFinish(); }
+      // shooting drill: a fresh 10 once the robot is empty
+      if (this.drill.kind === 'drill-shoot' && t < this.drill.len) { if (this.player.count() === 0) { this.drill.refillT += dt; if (this.drill.refillT > 1.2) { this.drill.refillT = 0; this.refillPlayer(10); this.toast('Refilled: 10 FUEL', 'info', 1.0); } } else this.drill.refillT = 0; }
     }
     if (S.mode === 'match' && !this.endScored && t >= MATCH.end) this.scoreEnd();
     if (S.mode === 'match' && t >= MATCH.end + MATCH.grace && !this.over) { this.over = true; this.finish(); }

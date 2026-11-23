@@ -50,7 +50,7 @@ function fuelStep(W, dt) {
       const s = terrainSlopeX(b.x, b.z); const nl = Math.hypot(s, 1), nx = -s / nl, ny = 1 / nl;
       const pen = (h + R - b.y) * ny; b.x += nx * pen; b.y += ny * pen;
       const vn = b.vx * nx + b.vy * ny;
-      if (vn < 0) { const e = vn < -0.8 ? 0.42 : 0; b.vx -= (1 + e) * vn * nx; b.vy -= (1 + e) * vn * ny; }
+      if (vn < 0) { const e = vn < -0.8 ? 0.42 : 0; b.vx -= (1 + e) * vn * nx; b.vy -= (1 + e) * vn * ny; if (vn < -0.9 && W.onBounce) W.onBounce(b, -vn); }
       // rolling resistance on carpet
       const tx = b.vx - nx * (b.vx * nx + b.vy * ny), tz = b.vz, ts = Math.hypot(tx, tz);
       if (ts > 1e-4) { const dec = Math.min(ts, 0.7 * dt) / ts; b.vx -= tx * dec; b.vz -= tz * dec; }
@@ -165,6 +165,15 @@ function robotFuel(W, rb, dt) {
     if (b.y - R > top) continue;
     if (b.shooter === rb && W.t - b.launchT < 0.6) continue;   // our own shot leaving the shooter
     const lx = dx0 * fx + dz0 * fz, lz = -dx0 * fz + dz0 * fx;
+    // smooth intake: the spinning pickup roller draws FUEL in front of it toward the middle of the module
+    if (intaking && rb.spec === IRISH && W.settings.intakeModel !== 'cad' && rb.deployed() && rb.count() < cap && b.y < 0.3) {
+      const front = rb.spec.hl + (IRISH.intake.tipY - IRISH.bumper.y1) * IN, reach = 0.5;
+      if (lx > front - 0.03 && lx < front + reach && Math.abs(lz) < (IRISH.captureHalfW || 0.28) + 0.24) {
+        const [pvx, pvz] = rb.pointVel(b.x, b.z), pull = 0.35 + 1.1 * (1 - (lx - front) / reach), side = -Math.sign(lz) * Math.min(Math.abs(lz) * 5, 1.0);
+        const tvx = pvx - fx * pull - fz * side, tvz = pvz - fz * pull + fx * side, k = Math.min(1, dt * 9);
+        b.vx += (tvx - b.vx) * k; b.vz += (tvz - b.vz) * k;
+      }
+    }
     // intake capture
     if (intaking && rb.count() < cap && b.y < 0.32) {
       let inZone = false;

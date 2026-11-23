@@ -89,7 +89,19 @@ kbd { font: 600 11.5px var(--mono); color: var(--fg); background: rgba(255,255,2
 #map { right: max(12px, env(safe-area-inset-right, 0px)); bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); padding: 6px; }
 #map canvas { display: block; width: 160px; height: 314px; }
 #countdown { position: fixed; inset: 0; display: grid; place-items: center; z-index: 8; pointer-events: none; font: 800 160px/1 var(--display); color: #fff; text-shadow: 0 6px 40px rgba(0,0,0,.6); }
-#countdown.go { color: var(--fuel); }
+#countdown { display: grid; align-content: center; justify-items: center; gap: 18px; }
+#countdown.go #cdNum { color: var(--fuel); }
+#cdTip { font: 600 17px/1.35 var(--body); text-shadow: 0 2px 12px rgba(0,0,0,.8); max-width: min(560px, calc(100vw - 32px)); text-align: center; padding: 10px 16px; border-radius: 10px; background: var(--glass); border: 1px solid var(--line); }
+#cdTip:empty { display: none; }
+.timeline { position: relative; display: flex; height: 16px; background: var(--solid); border-top: 1px solid var(--line); }
+.timeline i { font: 700 9.5px/16px var(--display); letter-spacing: .08em; color: var(--muted); text-align: center; border-right: 1px solid rgba(0,0,0,.5); overflow: hidden; font-style: normal; }
+.timeline i.sw { background: repeating-linear-gradient(135deg, rgba(246,196,67,.22) 0 6px, rgba(246,196,67,.08) 6px 12px); color: var(--fuel); }
+.timeline i.dis { background: rgba(255,255,255,.05); }
+.timeline b { position: absolute; top: -2px; bottom: -2px; width: 3px; margin-left: -1px; background: #fff; border-radius: 2px; box-shadow: 0 0 6px rgba(255,255,255,.8); }
+#fps { right: max(12px, env(safe-area-inset-right, 0px)); bottom: calc(env(safe-area-inset-bottom, 0px) + 340px); font-size: 11px; color: var(--muted); }
+.drills { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.drills span { font: 600 12px/1.2 var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
+.drills .btn { flex: 1; }
 
 /* ---------- screens ---------- */
 .screen { position: fixed; inset: 0; z-index: 20; overflow-y: auto; padding-block: 24px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
@@ -170,7 +182,8 @@ kbd { font: 600 11.5px var(--mono); color: var(--fg); background: rgba(255,255,2
 <div id="loading"><div class="ld"><div class="ldt">IRISH 2026 · BUILT</div><div class="ldb">Loading the Rev F robot CAD</div><div class="bar"><i></i></div></div></div>
 
 <div id="hud" hidden>
-  <div class="hud" id="tl"><button class="btn" id="bCam" type="button">Camera: Follow</button><button class="btn" id="bInput" type="button">Input: Keyboard</button><button class="btn" id="bPause" type="button">Pause</button></div>
+  <div class="hud" id="tl"><button class="btn" id="bCam" type="button">Camera: Follow</button><button class="btn" id="bInput" type="button">Input: Keyboard</button><button class="btn" id="bMute" type="button">Sound: On</button><button class="btn" id="bFull" type="button">Fullscreen</button><button class="btn" id="bPause" type="button">Pause</button></div>
+  <div class="hud mono" id="fps" hidden></div>
   <div class="hud" id="score">
     <div class="cols3">
       <div class="al blue"><span class="pts" id="sBlue">0</span><span class="sub" id="sBlueSub">FUEL 0</span></div>
@@ -178,6 +191,7 @@ kbd { font: 600 11.5px var(--mono); color: var(--fg); background: rgba(255,255,2
       <div class="al red"><span class="pts" id="sRed">0</span><span class="sub" id="sRedSub">FUEL 0</span></div>
     </div>
     <div class="pbar"><i id="pbar"></i></div>
+    <div class="timeline" id="timeline" hidden></div>
   </div>
   <div class="hud panel" id="zone"><span class="chip" id="zoneChip">NEAR HALF</span><span id="zoneText">Score in your side of the HUB</span><span class="mono" id="zoneNext"></span></div>
   <div class="hud" id="toasts"></div>
@@ -196,7 +210,7 @@ kbd { font: 600 11.5px var(--mono); color: var(--fg); background: rgba(255,255,2
   <div class="hud panel" id="prompt"></div>
   <div class="hud panel" id="map"><canvas id="mapc" width="320" height="628"></canvas></div>
 </div>
-<div id="countdown" hidden></div>
+<div id="countdown" hidden><div id="cdNum">3</div><div id="cdTip"></div></div>
 
 <div class="screen" id="menu" hidden>
   <div class="menuPanel">
@@ -204,6 +218,7 @@ kbd { font: 600 11.5px var(--mono); color: var(--fg); background: rgba(255,255,2
     <h1>Driver Sim<span>Team robot Rev F, from the Onshape CAD</span></h1>
     <p class="sub">A full BUILT match from the IRISH game manual: 0:20 AUTO, then 2:20 TELEOP where your ALLIANCE ZONE and side of the HUB swap every SHIFT.</p>
     <div class="play"><button class="btn big primary" id="bPlay" type="button">Play match</button><button class="btn big" id="bPractice" type="button">Free practice</button></div>
+    <div class="drills"><span>Drills</span><button class="btn" id="bDrillShoot" type="button">Shooting · 60 s</button><button class="btn" id="bDrillIntake" type="button">Intake · 90 s</button></div>
     <div class="quick">
       <div class="q"><span>Play with</span><div class="seg" data-set="input"><button type="button" data-val="keyboard">Keyboard</button><button type="button" data-val="controller">Controller</button></div><div class="padstat" id="padStat"><i class="lamp"></i><span>No controller: plug one in and press any button</span></div></div>
       <div class="q"><span>Alliance</span><div class="seg" data-set="alliance"><button type="button" data-val="blue">Blue</button><button type="button" data-val="red">Red</button></div></div>
@@ -219,9 +234,9 @@ kbd { font: 600 11.5px var(--mono); color: var(--fg); background: rgba(255,255,2
 <div class="screen dim" id="settings" hidden>
   <div class="card">
     <div class="row between"><h1>Settings</h1><button class="btn primary" id="bCloseSet" type="button">Done</button></div>
-    <div class="tabs" id="tabs"><button type="button" data-tab="game" class="on">Game</button><button type="button" data-tab="controls">Controls</button><button type="button" data-tab="robot">Robot</button><button type="button" data-tab="graphics">Graphics</button></div>
+    <div class="tabs" id="tabs"><button type="button" data-tab="game" class="on">Game</button><button type="button" data-tab="controls">Controls</button><button type="button" data-tab="robot">Robot</button><button type="button" data-tab="graphics">Display &amp; sound</button></div>
     <div class="tab form" data-tab="game">
-      <label>Mode<select data-set="mode"><option value="match">Full match (2:40)</option><option value="practice">Free practice (shifts loop)</option></select></label>
+      <label>Mode<select data-set="mode"><option value="match">Full match (2:40)</option><option value="practice">Free practice (shifts loop)</option><option value="drill-shoot">Shooting drill (60 s)</option><option value="drill-intake">Intake drill (90 s)</option></select></label>
       <label>Alliance<select data-set="alliance"><option value="blue">Blue</option><option value="red">Red</option></select></label>
       <label>Driver station<select data-set="station"><option value="1">Station 1 (left)</option><option value="2">Station 2 (right)</option></select></label>
       <label>Start spot on the line<select data-set="start"><option value="center">Centre (facing HUB)</option><option value="left">Left</option><option value="right">Right</option></select></label>
@@ -242,7 +257,7 @@ kbd { font: 600 11.5px var(--mono); color: var(--fg); background: rgba(255,255,2
     <div class="tab form" data-tab="robot" hidden>
       <label>Shooter RPM<select data-set="shotMode"><option value="vision">Vision: shot table by distance</option><option value="presets">Driver presets (1-4 / D-pad)</option></select></label>
       <label>Feed only when the drum is ready<select data-set="gate"><option value="true">Yes (like robot code)</option><option value="false">No</option></select></label>
-      <label>Intake model<select data-set="intakeModel"><option value="cad">Team sim: needs 3 ft/s approach</option><option value="easy">Easy: touch it, own it</option></select></label>
+      <label>Intake model<select data-set="intakeModel"><option value="smooth">Smooth: rollers pull FUEL in</option><option value="cad">Strict team sim: needs 3 ft/s approach</option></select></label>
       <label>Hopper<select data-set="hopper"><option value="passive">Passive ramp (CAD: 1.5 FUEL/s)</option><option value="powered">Powered floor (what-if)</option></select></label>
       <label>Shot scatter<select data-set="noise"><option value="real">Realistic</option><option value="none">None</option></select></label>
     </div>
@@ -251,6 +266,10 @@ kbd { font: 600 11.5px var(--mono); color: var(--fg); background: rgba(255,255,2
       <label>Starting camera<select data-set="camera"><option value="follow">Follow the robot</option><option value="driver">Driver station (realistic)</option><option value="overhead">Overhead</option></select></label>
       <label>Robot name tags<select data-set="labels"><option value="true">Show</option><option value="false">Hide</option></select></label>
       <label>Sound<select data-set="sound"><option value="true">On</option><option value="false">Off</option></select></label>
+      <label>Volume<select data-set="volume"><option value="1">100%</option><option value="0.7">70%</option><option value="0.45">45%</option><option value="0.25">25%</option></select></label>
+      <label>Aim preview arc<select data-set="arc"><option value="true">Show</option><option value="false">Hide</option></select></label>
+      <label>Shot trails<select data-set="trail"><option value="true">Show</option><option value="false">Hide</option></select></label>
+      <label>Frame rate counter<select data-set="fps"><option value="false">Hide</option><option value="true">Show</option></select></label>
     </div>
   </div>
 </div>
@@ -280,4 +299,5 @@ kbd { font: 600 11.5px var(--mono); color: var(--fg); background: rgba(255,255,2
 <script src="js/fuel.js"></script>
 <script src="js/game.js"></script>
 <script src="js/controls.js"></script>
+<script src="js/audio.js"></script>
 <script src="js/main.js"></script>

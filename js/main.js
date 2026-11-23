@@ -331,7 +331,7 @@
     for (const b of heldVis.keys()) if (!held.has(b)) heldVis.delete(b);
     for (let i = 0; i < fuelMesh.count; i++) {
       const b = balls[i];
-      if (b.state === F_FIELD) { tmpE.set(b.x * 3.1, b.z * 2.7, 0); tmpQ.setFromEuler(tmpE); tmpP.set(b.x, b.y, b.z); tmpM.compose(tmpP, tmpQ, tmpS); }
+      if (b.state === F_FIELD) { const a = b.ox === undefined ? 1 : renderAlpha, x = lerp(b.ox === undefined ? b.x : b.ox, b.x, a), y = lerp(b.oy === undefined ? b.y : b.oy, b.y, a), z = lerp(b.oz === undefined ? b.z : b.oz, b.z, a); tmpE.set(x * 3.1, z * 2.7, 0); tmpQ.setFromEuler(tmpE); tmpP.set(x, y, z); tmpM.compose(tmpP, tmpQ, tmpS); }
       else if (b.state === F_HELD && held.has(b)) { const [w, p] = held.get(b); tmpE.set(p[1] / 2.955, p[0] / 2.955, 0); tmpQ.setFromEuler(tmpE); tmpP.set(w[0], w[1], w[2]); tmpM.compose(tmpP, tmpQ, tmpS); }
       else tmpM.copy(hid);
       fuelMesh.setMatrixAt(i, tmpM);
@@ -359,8 +359,49 @@
       hubLed[side].emissive = col(COL[owner]); hubLed.flash[side] *= Math.exp(-dt * 5); hubLed[side].emissiveIntensity = 1.6 + hubLed.flash[side] * 6;
     }
   }
-  W.onScoreFx = (b, side, all, mine) => { burst(b.x, HUB.rim, b.z, COL[all], mine ? 14 : 8); hubLed.flash[side] = 1; if (mine) rumble(0, 0.45, 90); };
+  W.onScoreFx = (b, side, all, mine) => { burst(b.x, HUB.rim, b.z, COL[all], mine ? 14 : 8); hubLed.flash[side] = 1; Sound.score(mine); if (mine) { rumble(0, 0.45, 90); crowdBoost = Math.min(1, crowdBoost + 0.35); if (Math.random() < 0.35) Sound.cheer(crowdBoost); } };
   W.onFoulFx = rb => { if (rb.isPlayer) rumble(0.9, 0.6, 320); };
+  let renderAlpha = 1;
+  // trails behind the player's shots (last ~0.6 s of flight)
+  const TRAIL_N = 36, trails = [];
+  for (let i = 0; i < 12; i++) {
+    const g = new THREE.BufferGeometry(), pos = new Float32Array(TRAIL_N * 3); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const line = new THREE.Line(g, new THREE.LineBasicMaterial({ color: col(COL.fuel), transparent: true, opacity: 0.55, depthWrite: false })); line.frustumCulled = false; line.visible = false; scene.add(line);
+    trails.push({ line, pos, n: 0, b: null });
+  }
+  function stepTrails() {
+    const on = S().trail && state !== 'menu';
+    for (const tr of trails) if (tr.b && (!on || tr.b.state !== F_FIELD || W.t - tr.b.launchT > 3 || tr.b.y < 0.12)) { tr.b = null; tr.line.visible = false; }
+    if (!on) return;
+    for (const b of W.fuel.balls) if (b.state === F_FIELD && b.shooter && b.shooter.isPlayer && W.t - b.launchT < 0.5 && b.y > 0.3 && !trails.some(t => t.b === b)) { const t = trails.find(x => !x.b); if (t) { t.b = b; t.n = 0; } }
+    for (const tr of trails) if (tr.b) {
+      if (tr.n === TRAIL_N) tr.pos.copyWithin(0, 3); else tr.n++;
+      const i = (tr.n - 1) * 3; tr.pos[i] = tr.b.x; tr.pos[i + 1] = tr.b.y; tr.pos[i + 2] = tr.b.z;
+      tr.line.geometry.setDrawRange(0, tr.n); tr.line.geometry.attributes.position.needsUpdate = true; tr.line.visible = tr.n > 1;
+    }
+  }
+  // aim preview: where a shot would go right now (green = into the HUB)
+  const ARC_N = 90, arcPos = new Float32Array(ARC_N * 3), arcGeo = new THREE.BufferGeometry(); arcGeo.setAttribute('position', new THREE.BufferAttribute(arcPos, 3));
+  const arcMat = new THREE.LineDashedMaterial({ color: 0xffffff, transparent: true, opacity: 0.8, dashSize: 0.12, gapSize: 0.08, depthWrite: false });
+  const arcLine = new THREE.Line(arcGeo, arcMat); arcLine.frustumCulled = false; arcLine.visible = false; scene.add(arcLine);
+  function drawArc(P) {
+    const g = W.game, show = S().arc && state === 'run' && P.count() > 0 && g.enabled && !g.isAuto() && P.shot && (S().mode !== 'match' || g.inZone(P));
+    arcLine.visible = !!show; if (!show) return;
+    const sh = IRISH.shooter, p = P.toWorld(0, sh.exitY, sh.exitZ), el = sh.launchDeg * DEG + P.pitch;
+    const v = sh.kExit * (P.shot.rpm * 2 * Math.PI / 60) * sh.Rw, ch = Math.cos(el);
+    let x = p[0], y = p[1], z = p[2], vx = P.fx * ch * v + P.vx, vy = Math.sin(el) * v, vz = P.fz * ch * v + P.vz, n = 0, hit = false;
+    const sx = -P.fz, sz = P.fx, dt = 0.02;
+    for (; n < ARC_N; n++) {
+      arcPos[n * 3] = x; arcPos[n * 3 + 1] = y; arcPos[n * 3 + 2] = z;
+      if (y < 0.05 || (n > 3 && hexDist(x, z) < 0 && y < HUB.rim)) { hit = hexDist(x, z) < 0 && y < HUB.rim; n++; break; }
+      if (Math.abs(x - HUB.cx) < HUB.half && Math.abs(z - HUB.cz) < HUB.half && y < HUB.boxTop) { n++; break; }
+      const sp = Math.hypot(vx, vy, vz), c = FUEL.k * FUEL.cl * sp;
+      vx += (-FUEL.k * FUEL.cd * sp * vx - c * sz * vy) * dt; vy += (-GRAV - FUEL.k * FUEL.cd * sp * vy + c * (sz * vx - sx * vz)) * dt; vz += (-FUEL.k * FUEL.cd * sp * vz + c * sx * vy) * dt;
+      x += vx * dt; y += vy * dt; z += vz * dt;
+    }
+    arcGeo.setDrawRange(0, n); arcGeo.attributes.position.needsUpdate = true; arcLine.computeLineDistances();
+    arcMat.color = col(hit ? 0x34d399 : 0xffffff); arcMat.opacity = hit ? 0.9 : 0.45;
+  }
   // arrow over the robot pointing where to go (the new ALLIANCE ZONE after a swap, the STARTING LINE in END GAME)
   const arrow = new THREE.Group();
   (function () {
@@ -428,8 +469,10 @@
     if (st.drive === 'tank' && (sThr || sRight)) { l = sq(sThr) * scale; r = sq(sRight) * scale; }
     else if (st.drive === 'tank') { l = inp.kbT * scale; r = inp.kbRR * scale; }
     else {
-      const thr = sThr ? sq(sThr) : inp.kbT;
-      const trn = sTurn ? sq(sTurn) : inp.kbR * 0.8;
+      // sticks are eased like the keys so the robot never lurches
+      inp.pT = slew(inp.pT || 0, sThr ? sq(sThr) : 0, 7); inp.pR = slew(inp.pR || 0, sTurn ? sq(sTurn) : 0, 10);
+      const thr = Math.abs(inp.pT) > 0.004 ? inp.pT : inp.kbT;
+      const trn = Math.abs(inp.pR) > 0.004 ? inp.pR : inp.kbR * 0.8;
       // turn feedforward: the smallest input already beats the drop-center wheel scrub (about 0.26 output)
       const tOut = Math.abs(trn) > 0.01 ? Math.sign(trn) * lerp(0.26, ts, Math.min(1, Math.abs(trn))) : 0;
       l = (thr + tOut) * scale; r = (thr - tOut) * scale;
@@ -441,6 +484,9 @@
     ['preset1', 'preset2', 'preset3', 'preset4'].forEach((id, i) => { if (edge(id)) inp.preset = i; });
     if (edge('camera') && state !== 'menu') cycleCamera();
     if (edge('pause') || e('KeyP')) togglePause();
+    if (state === 'run' && edge('reset') && S().mode !== 'match') { W.game.resetPlayer(); toast('Robot back on the STARTING LINE', 'info', 1.2); }
+    if (state === 'run' && edge('refill') && S().mode === 'practice') { W.game.refillPlayer(10); toast('Loaded 10 FUEL', 'info', 1.0); }
+    if (e('KeyM')) $('map').hidden = !$('map').hidden;
     if (state === 'menu' && $('settings').hidden && (pe.has(0) || pe.has(9))) startMatch('match');
     else if (state === 'results' && pe.has(0)) startMatch(S().mode);
     padPrevAct = padNow;
@@ -449,24 +495,16 @@
   function rumble(strong, weak, ms) { const p = getPad(); try { if (p && p.vibrationActuator) p.vibrationActuator.playEffect('dual-rumble', { duration: ms, strongMagnitude: strong, weakMagnitude: weak }); } catch (e) { /* not supported */ } }
 
   // ---------------- sound ----------------
-  let actx = null;
-  function beep(freq, dur, type = 'sine', vol = 0.06, slide = 0) {
-    if (!actx || !S().sound) return;
-    const o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime;
-    o.type = type; o.frequency.setValueAtTime(freq, t); if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(40, freq + slide), t + dur);
-    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); o.connect(g).connect(actx.destination); o.start(t); o.stop(t + dur + 0.02);
-  }
+  Sound.volume = S().volume === undefined ? 0.7 : S().volume; Sound.enabled = S().sound !== false;
+  let crowdBoost = 0;
   W.sfx = kind => {
-    if (kind === 'tick') beep(880, 0.08, 'square', 0.035);
-    else if (kind === 'shift') { beep(660, 0.12, 'square', 0.05); setTimeout(() => beep(990, 0.18, 'square', 0.05), 120); }
-    else if (kind === 'score') beep(1320, 0.07, 'triangle', 0.04);
-    else if (kind === 'shot') beep(180, 0.09, 'sawtooth', 0.025, -90);
-    else if (kind === 'pick') beep(520, 0.04, 'triangle', 0.03);
-    else if (kind === 'foul') beep(140, 0.35, 'sawtooth', 0.05);
-    else if (kind === 'end') beep(220, 0.9, 'sawtooth', 0.06, -60);
-    else if (kind === 'count') beep(523, 0.12, 'square', 0.045);
-    else if (kind === 'start') beep(1046, 0.35, 'square', 0.05);
+    if (kind === 'tick') Sound.tick(); else if (kind === 'shift') Sound.shiftHorn(); else if (kind === 'shot') Sound.shot();
+    else if (kind === 'pick') Sound.pickup(); else if (kind === 'foul') Sound.foul(); else if (kind === 'end') Sound.endHorn();
+    else if (kind === 'count') Sound.count(); else if (kind === 'start') Sound.go();
   };
+  const V2 = new THREE.Vector3();
+  W.onBounce = (b, v) => { if (state === 'run') Sound.thud(v, camera.position.distanceTo(V2.set(b.x, b.y, b.z))); };
+  document.addEventListener('click', e => { const b = e.target.closest('button'); if (b) { Sound.init(); Sound.click(); } });
 
   // ---------------- cameras ----------------
   const CAMS = ['follow', 'driver', 'overhead'], CAM_NAMES = { follow: 'Follow', driver: 'Driver station', overhead: 'Overhead' };
@@ -501,6 +539,7 @@
       V.set(P.x - fx * cam.dist, P.y + hh, P.z - fz * cam.dist);
       camPos.lerp(V, 1 - Math.exp(-dt * 10));
       camLook.lerp(V.set(P.x + fx * 1.4, P.y + 0.35, P.z + fz * 1.4), 1 - Math.exp(-dt * 12));
+      fov = 60 + 6 * Math.min(1, Math.hypot(P.vx, P.vz) / 5);
     } else if (cam.mode === 'driver') {
       const zr = blue ? 1 : -1, zs = (S().station == 2 ? 1 : -1) * 1.6 * zr;
       camPos.set(blue ? -0.55 : FIELD.L + 0.55, 1.72, CZ + zs);
@@ -509,7 +548,7 @@
       fov = 50; const tv = Math.tan(25 * DEG), hgt = Math.max((FIELD.L / 2 + 0.7) / tv, (FIELD.W / 2 + 0.7) / (tv * camera.aspect));
       camPos.set(CX, hgt, CZ); camLook.set(CX, 0, CZ); camera.up.set(blue ? 1 : -1, 0, 0);
     }
-    if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
+    if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = cam.mode === 'follow' ? camera.fov + (fov - camera.fov) * Math.min(1, dt * 4) : fov; camera.updateProjectionMatrix(); }
     camera.position.copy(camPos);
     if (cam.shake > 0.002) { camera.position.x += (Math.random() - 0.5) * cam.shake; camera.position.y += (Math.random() - 0.5) * cam.shake; cam.shake *= Math.exp(-dt * 12); }
     camera.lookAt(camLook);
@@ -530,6 +569,7 @@
     $('sBlueSub').textContent = sub(sb); $('sRedSub').textContent = sub(sr);
     $('clock').textContent = state === 'countdown' ? fmt(g.clock()) : fmt(g.clock()); $('period').textContent = state === 'countdown' ? 'GET READY' : p.name;
     $('pbar').style.width = (100 * clamp((W.t - p.t0) / (p.t1 - p.t0), 0, 1)) + '%';
+    const tm = $('tlMark'); if (tm) tm.style.left = (100 * clamp(W.t / MATCH.end, 0, 1)) + '%';
     const mine = P.alliance, zs = g.zoneSign(mine), near = (mine === 'blue') === (zs < 0);
     const chip = $('zoneChip'); chip.textContent = near ? 'NEAR HALF' : 'FAR HALF'; chip.style.background = zs < 0 ? 'var(--blue)' : 'var(--red)';
     $('zoneText').textContent = p.disabled ? (p.over ? 'Match over' : 'Robots disabled') : g.isAuto() ? (st.auto === 'manual' ? 'AUTO: you are driving (practice only)' : 'AUTO: your routine is driving') : `Score from the ${near ? 'near' : 'far'} half into the ${zs < 0 ? 'BLUE' : 'RED'} side of the HUB`;
@@ -609,7 +649,7 @@
   }
 
   // ---------------- settings, menus ----------------
-  const NUMERIC = ['turnScale', 'fuelBonus', 'station'], BOOL = ['defense', 'gate', 'labels', 'sound'];
+  const NUMERIC = ['turnScale', 'fuelBonus', 'station', 'volume'], BOOL = ['defense', 'gate', 'labels', 'sound', 'arc', 'trail', 'fps'];
   const parseVal = (k, v) => BOOL.includes(k) ? v === true || v === 'true' : NUMERIC.includes(k) ? +v : v;
   function saveSettings() { try { localStorage.setItem(SET_KEY, JSON.stringify(W.settings)); } catch (e) { /* ignore */ } }
   function setSetting(k, v) {
@@ -618,6 +658,9 @@
     if (k === 'quality') applyQuality();
     if (k === 'camera') { cam.mode = W.settings.camera; $('bCam').textContent = 'Camera: ' + CAM_NAMES[cam.mode]; applyLabels(); }
     if (k === 'labels') applyLabels();
+    if (k === 'volume') Sound.setVolume(W.settings.volume);
+    if (k === 'sound') Sound.setEnabled(W.settings.sound);
+    if (k === 'fps') $('fps').hidden = !W.settings.fps;
     if ((k === 'alliance' || k === 'ai' || k === 'start') && state === 'menu') { W.game.reset(); rebuildRobots(); }
   }
   function syncUI() {
@@ -627,6 +670,7 @@
       else el.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.val === v));
     });
     $('bInput').textContent = 'Input: ' + (S().input === 'controller' ? 'Controller' : 'Keyboard');
+    $('bMute').textContent = S().sound ? 'Sound: On' : 'Sound: Off';
     $('cheat').innerHTML = cheatHtml(S().input); $('cheat2').innerHTML = cheatHtml(S().input);
     updatePadStat();
   }
@@ -640,6 +684,7 @@
       : '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <span class="note">or arrows</span>';
     const rows = [['Drive', drive], [assists ? 'Shoot (aims for you)' : 'Shoot', gl('shoot')], ['Intake', gl('intake')], ['Outtake', gl('outtake')], ['Slow / precise', gl('slow')]];
     if (!assists) rows.push(['Stow intake', gl('stow')], ['Pre-spin drum', gl('prespin')]);
+    rows.push(['Reset robot (practice, drills)', gl('reset')], ['Load 10 FUEL (practice)', gl('refill')]);
     rows.push(['Camera', gl('camera') + (mode === 'keyboard' ? ' <span class="note">wheel zooms</span>' : '')], ['Pause', gl('pause')]);
     return `<h3>${mode === 'controller' ? 'Controller' : 'Keyboard'} controls</h3>` + rows.map(([a, k]) => `<span>${a}</span><span class="keys">${k}</span>`).join('');
   }
@@ -681,13 +726,13 @@
   let cd = 0, goT = 0;
   function startMatch(mode) {
     if (mode) setSetting('mode', mode);
-    if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { actx = null; } }
+    Sound.init(); crowdBoost = 0; buildTimeline();
     cam.mode = S().camera || 'follow'; $('bCam').textContent = 'Camera: ' + CAM_NAMES[cam.mode];
     W.game.reset(); state = 'countdown'; rebuildRobots();
     Object.assign(inp, { prespin: false, preset: 3 });
     const P = W.player; cam.yaw = P.th; cam.orbit = 0; cam.tilt = 0;
     camPos.set(P.x - Math.cos(P.th) * 3.5, 1.8, P.z - Math.sin(P.th) * 3.5); camLook.set(P.x, 0.3, P.z);
-    cd = 3; goT = 0; showScreen(null); $('countdown').hidden = false; $('countdown').className = ''; $('countdown').textContent = '3'; W.sfx('count');
+    cd = 3; goT = 0; showScreen(null); $('countdown').hidden = false; $('countdown').className = ''; $('cdNum').textContent = '3'; $('cdTip').textContent = tipText(); W.sfx('count');
   }
   function togglePause() {
     if (!$('settings').hidden) return;
@@ -697,6 +742,7 @@
   function toMenu() { state = 'menu'; W.game.reset(); rebuildRobots(); showScreen('menu'); $('countdown').hidden = true; }
   W.onFinish = () => { state = 'results'; showResults(); };
   function showResults() {
+    if (W.game.drill) return showDrillResults();
     const g = W.game, st = S(), mine = st.alliance, opp = otherAlliance(mine), a = g.score[mine], b = g.score[opp], P = W.player;
     const head = a.total > b.total ? `${mine.toUpperCase()} WINS` : a.total < b.total ? `${opp.toUpperCase()} WINS` : 'TIE';
     $('resHead').textContent = `${head}  ${g.score.blue.total} - ${g.score.red.total}`;
@@ -718,7 +764,44 @@
       <p class="note">${a.fouls.length ? 'Fouls: ' + a.fouls.map(f => `${f.rule} (${f.who}, ${fmt(f.t)})`).join(', ') : 'No fouls against your alliance.'}</p></div>`;
     showScreen('results');
   }
+  function showDrillResults() {
+    const g = W.game, P = W.player, kind = g.drill.kind, mine = P.alliance, scored = g.score[mine].autoFuel + g.score[mine].teleFuel;
+    const acc = P.stats.shots ? Math.round(100 * P.stats.made / P.stats.shots) : 0, key = 'irish-sim-best-' + kind;
+    let best = 0; try { best = +localStorage.getItem(key) || 0; if (scored > best) localStorage.setItem(key, String(scored)); } catch (e) { /* storage blocked */ }
+    $('resHead').textContent = (kind === 'drill-shoot' ? 'Shooting drill: ' : 'Intake drill: ') + scored + ' FUEL';
+    $('resHead').style.color = scored > best ? 'var(--fuel)' : 'var(--fg)';
+    $('resBody').innerHTML = `<div><h2>Result</h2><table>
+      <tr><td>FUEL scored</td><td><b>${scored}</b>${scored > best ? ' · new best' : best ? ' · best ' + best : ''}</td></tr>
+      <tr><td>Shots / made</td><td>${P.stats.shots} / ${P.stats.made} (${acc}%)</td></tr>
+      <tr><td>FUEL picked up</td><td>${P.stats.collected}</td></tr>
+      <tr><td>Time</td><td>${g.drill.len} s</td></tr></table></div>
+      <div><h2>Next</h2><p class="note">${kind === 'drill-shoot' ? 'The robot refills to 10 each time it empties. Try different distances: the drum needs about 2.5 s to spin up from rest, so keep FUEL in the robot to keep it pre-spun.' : 'Drive through FUEL at 3+ ft/s with the intake down, then shoot from your half. The ramp feeds the shooter at about 1.5 FUEL/s, so shoot while you collect.'}</p></div>`;
+    showScreen('results');
+  }
   $('bPlay').onclick = () => startMatch('match'); $('bPractice').onclick = () => startMatch('practice');
+  $('bDrillShoot').onclick = () => startMatch('drill-shoot'); $('bDrillIntake').onclick = () => startMatch('drill-intake');
+  $('bMute').onclick = () => setSetting('sound', !S().sound);
+  $('bFull').onclick = () => { try { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => toast('Fullscreen is not available here', 'warn')); } catch (e) { toast('Fullscreen is not available here', 'warn'); } };
+  window.addEventListener('blur', () => { if (state === 'run') togglePause(); });
+  // ---- tips, timeline ----
+  const TIPS = [
+    'Hold shoot and the robot turns to the HUB and waits until the drum is ready.',
+    'Drive through FUEL with the intake down: the rollers pull it in.',
+    'Every SHIFT your ALLIANCE ZONE swaps halves: watch the yellow arrow and the timeline.',
+    'The deployed intake jams on the BUMP. Let it stow, or drive under the TRENCH.',
+    'The ramp feeds the shooter at about 1.5 FUEL/s: shoot while you collect.',
+    'Keep FUEL in the robot to keep the drum spinning; spin-up from rest takes about 2.5 s.',
+    'END GAME: park any part of your bumpers on your STARTING LINE for +2.',
+    'Mouse wheel zooms the follow camera; drag to look around; C changes the camera.',
+    'The dashed line is where a shot would land right now. Green means it goes in.',
+  ];
+  const tipText = () => TIPS[Math.floor(Math.random() * TIPS.length)];
+  const SHORT = { 'AUTO': 'AUTO', 'AUTO SCORING': '', 'TRANSITION SHIFT': 'T', 'SHIFT 1': 'S1', 'SHIFT 2': 'S2', 'SHIFT 3': 'S3', 'SHIFT 4': 'S4', 'END GAME': 'END' };
+  function buildTimeline() {
+    const el = $('timeline'); if (S().mode !== 'match') { el.hidden = true; return; }
+    el.hidden = false;
+    el.innerHTML = MATCH.periods.map(p => `<i class="${p.swap ? 'sw' : ''}${p.disabled ? ' dis' : ''}" style="flex:${p.t1 - p.t0}" title="${p.name}">${SHORT[p.name] || ''}</i>`).join('') + '<b id="tlMark"></b>';
+  }
   $('bAgain').onclick = () => startMatch(S().mode); $('bRestart').onclick = () => startMatch(S().mode);
   $('bResume').onclick = togglePause; $('bQuit').onclick = toMenu; $('bQuit2').onclick = toMenu;
   $('bSettings').onclick = openSettings; $('bSettings2').onclick = openSettings; $('bCloseSet').onclick = closeSettings;
@@ -728,9 +811,11 @@
   Controls.listeners.push(renderControls);
 
   // ---------------- loop ----------------
-  const DT = 1 / 120; let acc = 0, last = performance.now(), padT = 0;
+  const DT = 1 / 120; let acc = 0, last = performance.now(), padT = 0, fpsN = 0, fpsT = 0, lastIntakeTarget, lastJam = false;
   function physics(dt) {
     const g = W.game, st = S(), P = W.player;
+    for (const r of W.robots) { const p = r.p0 || (r.p0 = {}); p.x = r.x; p.z = r.z; p.th = r.th; p.y = r.y; p.pitch = r.pitch; }
+    for (const b of W.fuel.balls) { b.ox = b.x; b.oy = b.y; b.oz = b.z; }
     W.t += dt; g.update(dt);
     const en = g.enabled;
     if (g.isAuto() && st.auto !== 'manual') runAuto(W, P, dt);
@@ -742,7 +827,7 @@
     for (const r of W.robots) resolveStatic(r);
     const rs = W.robots;
     for (let i = 0; i < rs.length; i++) for (let j = i + 1; j < rs.length; j++) if (resolveRobots(rs[i], rs[j])) g.onRobotContact(rs[i], rs[j]);
-    const hit = v0 - Math.hypot(P.vx, P.vz); if (hit > 1.0) { cam.shake = Math.min(0.08, hit * 0.03); rumble(0.6, 0.35, 140); }
+    const hit = v0 - Math.hypot(P.vx, P.vz); if (hit > 1.0) { cam.shake = Math.min(0.08, hit * 0.03); rumble(0.6, 0.35, 140); Sound.clank(hit); }
     fuelStep(W, dt / 2); fuelStep(W, dt / 2);
   }
   function frame(now) {
@@ -750,13 +835,25 @@
     pollInput(dt);
     if (state === 'countdown') {
       const before = Math.ceil(cd); cd -= dt; const after = Math.ceil(cd);
-      if (cd <= 0) { state = 'run'; goT = 0.7; $('countdown').textContent = 'GO'; $('countdown').className = 'go'; W.sfx('start'); }
-      else { $('countdown').textContent = after; if (after !== before) W.sfx('count'); }
+      if (cd <= 0) { state = 'run'; goT = 0.7; $('cdNum').textContent = 'GO'; $('countdown').className = 'go'; W.sfx('start'); }
+      else { $('cdNum').textContent = after; if (after !== before) W.sfx('count'); }
     } else if (goT > 0) { goT -= dt; if (goT <= 0) $('countdown').hidden = true; }
     if (state === 'run' && !W._freeze) { acc += dt; let n = 0; while (acc >= DT && n < 6) { physics(DT); acc -= DT; n++; } if (n === 6) acc = 0; }
     const P = W.player;
+    // render between the last two physics steps so motion is smooth at any frame rate
+    renderAlpha = state === 'run' && !W._freeze ? clamp(acc / DT, 0, 1) : 1;
+    const saved = [];
+    if (P && renderAlpha < 1) for (const r of W.robots) if (r.p0) {
+      saved.push([r, r.x, r.z, r.th, r.y, r.pitch]); const a = renderAlpha, p = r.p0;
+      r.x = lerp(p.x, r.x, a); r.z = lerp(p.z, r.z, a); r.th = p.th + wrapAng(r.th - p.th) * a; r.y = lerp(p.y, r.y, a); r.pitch = lerp(p.pitch, r.pitch, a);
+    }
+    fpsN++; fpsT += dt; if (fpsT >= 0.5) { $('fps').textContent = Math.round(fpsN / fpsT) + ' fps'; fpsN = 0; fpsT = 0; }
     if (P) {
       if (state === 'menu') P.intakePos = 0.5 + 0.5 * Math.cos(now / 1000 * 0.7);
+      if (P.intakeTarget !== lastIntakeTarget) { if (lastIntakeTarget !== undefined && state === 'run') Sound.deploy(P.intakeTarget > 0.5); lastIntakeTarget = P.intakeTarget; }
+      if (P.jam && !lastJam && state === 'run') Sound.jam(); lastJam = P.jam;
+      crowdBoost *= Math.exp(-dt * 0.6);
+      Sound.update({ active: state === 'run' || state === 'countdown', speed: Math.hypot(P.vx, P.vz), effort: (Math.abs(P.cmd.l) + Math.abs(P.cmd.r)) / 2, drumRpm: P.drumW * 60 / (2 * Math.PI), rollers: P.rollers, crowd: state === 'menu' || state === 'loading' ? 0.006 : 0.016 + 0.03 * crowdBoost });
       for (const [rb, v] of robotVis) {
         v.position.set(rb.x, rb.y, rb.z); v.rotation.set(0, -rb.th, rb.pitch);
         if (v.userData.pivot) v.userData.pivot.rotation.z = rb.intakePos * IRISH.intake.stowDeg * DEG;
@@ -767,11 +864,12 @@
       const tgt = state === 'run' ? arrowTarget(P) : null;
       arrow.visible = !!tgt;
       if (tgt) { arrow.position.set(P.x, P.y + 1.15 + 0.05 * Math.sin(now / 160), P.z); arrow.rotation.y = -Math.atan2(tgt[1] - P.z, tgt[0] - P.x); }
-      fuelDt = dt; drawFuel(); stepFx(dt); updateCamera(dt);
+      fuelDt = dt; drawFuel(); stepFx(dt); stepTrails(); drawArc(P); updateCamera(dt);
       if (state !== 'menu' && state !== 'loading') updateHud(dt);
     }
     padT -= dt; if (padT <= 0) { padT = 0.5; if (state === 'menu') updatePadStat(); }
     renderer.render(scene, camera);
+    for (const [r, x, z, th, y, pitch] of saved) { r.x = x; r.z = z; r.th = th; r.y = y; r.pitch = pitch; }
     requestAnimationFrame(frame);
   }
   W._dbg = { physics, render: () => renderer.render(scene, camera), renderer, scene, camera, cam, inp, start: m => startMatch(m), poll: dt => pollInput(dt), hud: () => { hudT = 0; updateHud(1); drawFuel(); updateCamera(1); }, frame: t => frame(t), state: () => state, setSetting, openSettings, toMenu };
@@ -780,7 +878,7 @@
   try {
     decodeMesh(); buildShotExtension(); buildAiTable(); fillSpec();
     W.game.reset(); rebuildRobots(); applyQuality(); syncUI(); renderControls();
-    $('bCam').textContent = 'Camera: ' + CAM_NAMES[cam.mode];
+    $('bCam').textContent = 'Camera: ' + CAM_NAMES[cam.mode]; $('fps').hidden = !S().fps;
     $('loading').hidden = true; state = 'menu'; showScreen('menu');
   } catch (err) {
     $('loading').querySelector('.ldb').textContent = 'Could not load: ' + err.message; console.error(err);
