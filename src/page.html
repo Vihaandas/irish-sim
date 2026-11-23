@@ -1,0 +1,283 @@
+<title>IRISH BUILT Driver Sim</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Saira+Condensed:wght@600;700;800&display=swap">
+<style>
+/* Layout: full-bleed 3D arena; glass HUD panels pinned to the corners; start screen = left control column over a live turntable of the robot. One dark look. */
+:root {
+  --bg: #0a0e13; --glass: rgba(13, 18, 25, 0.78); --glass-hi: rgba(22, 29, 39, 0.92); --solid: #111821; --line: rgba(160, 182, 210, 0.16); --line-hi: rgba(190, 208, 230, 0.38);
+  --fg: #e8edf3; --muted: #8e9bab; --blue: #3b82f6; --blue-deep: #1d4ed8; --red: #ef4444; --red-deep: #b91c1c;
+  --fuel: #f6c443; --ok: #34d399; --warn: #f59e0b; --bad: #f87171;
+  --display: 'Saira Condensed', 'Arial Narrow', system-ui, sans-serif; --body: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; --mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+[hidden] { display: none !important; }
+*, *::before, *::after { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font: 14px/1.4 var(--body); overflow: hidden; margin: 0; }
+button { font: inherit; }
+#view { position: fixed; inset: 0; }
+#view canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.btn { font: 600 13px var(--body); color: var(--fg); background: var(--glass); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; cursor: pointer; backdrop-filter: blur(8px); }
+.btn:hover { border-color: var(--line-hi); background: var(--glass-hi); }
+.btn:focus-visible, select:focus-visible, .seg button:focus-visible, .bind:focus-visible { outline: 2px solid var(--fuel); outline-offset: 2px; }
+.btn.primary { background: var(--fuel); color: #17130a; border-color: var(--fuel); }
+.btn.primary:hover { background: #ffd35c; }
+.btn.big { font: 700 20px/1 var(--display); letter-spacing: .06em; text-transform: uppercase; padding: 14px 18px; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.note { font-size: 12px; color: var(--muted); }
+.badtxt { color: var(--bad); }
+kbd { font: 600 11.5px var(--mono); color: var(--fg); background: rgba(255,255,255,.1); border: 1px solid var(--line-hi); border-bottom-width: 2px; border-radius: 4px; padding: 1px 6px; white-space: nowrap; }
+.g { display: inline-block; font: 700 11px/1 var(--display); letter-spacing: .04em; color: #fff; background: #3a4350; border-radius: 5px; padding: 4px 6px; min-width: 20px; text-align: center; white-space: nowrap; }
+.g.ga { background: #22a35a; border-radius: 50%; min-width: 22px; } .g.gb { background: #d43b3b; border-radius: 50%; min-width: 22px; }
+.g.gx { background: #2f6fd8; border-radius: 50%; min-width: 22px; } .g.gy { background: #d9a91a; color: #1a1406; border-radius: 50%; min-width: 22px; }
+.g.gt { background: #545e6c; border-radius: 6px 6px 4px 4px; } .g.gd { background: #3a4350; } .g.gs { background: #2b323c; border: 1px solid var(--line-hi); }
+
+/* ---------- HUD ---------- */
+.hud { position: fixed; z-index: 5; pointer-events: none; }
+.hud .btn { pointer-events: auto; }
+.panel { background: var(--glass); border: 1px solid var(--line); border-radius: 10px; backdrop-filter: blur(8px); }
+#tl { top: calc(env(safe-area-inset-top, 0px) + 12px); left: max(12px, env(safe-area-inset-left, 0px)); display: flex; gap: 6px; flex-wrap: wrap; max-width: 34vw; }
+#tl .btn { padding: 6px 10px; font-size: 12px; }
+#score { top: calc(env(safe-area-inset-top, 0px) + 10px); left: 50%; transform: translateX(-50%); width: min(560px, calc(100vw - 32px)); border-radius: 10px; overflow: hidden; border: 1px solid var(--line); box-shadow: 0 8px 30px rgba(0,0,0,.35); }
+#score .cols3 { display: grid; grid-template-columns: 1fr auto 1fr; }
+#score .al { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 14px; }
+#score .al.blue { background: linear-gradient(90deg, var(--blue-deep), var(--blue)); }
+#score .al.red { background: linear-gradient(270deg, var(--red-deep), var(--red)); flex-direction: row-reverse; }
+#score .pts { font: 800 36px/1 var(--display); font-variant-numeric: tabular-nums; }
+#score .sub { font: 600 11px/1.25 var(--mono); opacity: .9; }
+#score .al.red .sub { text-align: right; }
+#score .mid { background: var(--solid); padding: 5px 18px 4px; text-align: center; min-width: 150px; }
+#clock { font: 800 34px/1 var(--display); font-variant-numeric: tabular-nums; }
+#period { font: 700 12px/1.2 var(--display); letter-spacing: .14em; color: var(--muted); text-transform: uppercase; }
+#score .pbar { height: 4px; background: rgba(255,255,255,.08); } #score .pbar i { display: block; height: 100%; background: var(--fuel); width: 0; }
+#zone { top: calc(env(safe-area-inset-top, 0px) + 82px); left: 50%; transform: translateX(-50%); padding: 6px 12px; display: flex; gap: 10px; align-items: center; font: 600 13px/1.2 var(--body); white-space: nowrap; max-width: calc(100vw - 32px); overflow: hidden; }
+#zone .chip { font: 700 12px/1 var(--display); letter-spacing: .1em; padding: 4px 8px; border-radius: 4px; text-transform: uppercase; }
+#zone.warnswap { border-color: var(--fuel); box-shadow: 0 0 0 1px var(--fuel), 0 0 22px rgba(246,196,67,.35); }
+#toasts { top: calc(env(safe-area-inset-top, 0px) + 124px); left: 50%; transform: translateX(-50%); display: grid; gap: 6px; justify-items: center; width: min(600px, calc(100vw - 32px)); }
+#toasts div { font: 700 19px/1.15 var(--display); letter-spacing: .04em; padding: 7px 16px; border-radius: 8px; background: var(--glass-hi); border: 1px solid var(--line); text-align: center; animation: pop .18s ease-out; }
+#toasts .good { color: var(--ok); } #toasts .bad { color: #fff; background: rgba(185,28,28,.88); } #toasts .warn { color: var(--warn); }
+#toasts .swap { color: #17130a; background: var(--fuel); font-size: 23px; }
+@keyframes pop { from { transform: scale(.92); opacity: .4; } to { transform: none; opacity: 1; } }
+#feed { right: max(12px, env(safe-area-inset-right, 0px)); top: calc(env(safe-area-inset-top, 0px) + 12px); width: 260px; display: grid; gap: 4px; font-size: 11.5px; }
+#feed div { background: var(--glass); border-left: 3px solid var(--muted); padding: 4px 8px; border-radius: 5px; }
+#feed .bad { border-color: var(--bad); } #feed .warn { border-color: var(--warn); } #feed .good { border-color: var(--ok); }
+
+#robot { left: max(12px, env(safe-area-inset-left, 0px)); bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); width: 300px; padding: 12px 14px; display: grid; gap: 10px; }
+#robot .head { display: flex; justify-content: space-between; align-items: baseline; font: 700 13px/1 var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.fuelrow { display: flex; align-items: center; gap: 12px; }
+.fuelnum { font: 800 44px/0.85 var(--display); font-variant-numeric: tabular-nums; min-width: 72px; }
+.fuelnum small { font-size: 18px; color: var(--muted); }
+.dots { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; flex: 1; }
+.dots i { aspect-ratio: 1; border-radius: 50%; border: 1.5px solid rgba(246,196,67,.35); }
+.dots i.on { background: var(--fuel); border-color: var(--fuel); box-shadow: 0 0 8px rgba(246,196,67,.5); }
+.dots i.over { background: var(--bad); border-color: var(--bad); }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.st { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 7px; background: rgba(255,255,255,.04); border: 1px solid var(--line); min-width: 0; }
+.st .lamp { width: 9px; height: 9px; border-radius: 50%; background: #4b5563; flex: none; }
+.st.ok .lamp { background: var(--ok); box-shadow: 0 0 8px var(--ok); } .st.warn .lamp { background: var(--warn); box-shadow: 0 0 8px var(--warn); }
+.st.bad .lamp { background: var(--bad); box-shadow: 0 0 8px var(--bad); } .st.fuel .lamp { background: var(--fuel); box-shadow: 0 0 8px var(--fuel); }
+.st > div { min-width: 0; }
+.st b { display: block; font: 600 10px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.st span { display: block; font: 600 12.5px/1.25 var(--body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.drum { height: 6px; background: rgba(255,255,255,.08); border-radius: 3px; position: relative; overflow: hidden; }
+.drum i { position: absolute; inset: 0 auto 0 0; background: var(--muted); border-radius: 3px; }
+.drum u { position: absolute; top: -2px; bottom: -2px; width: 3px; background: var(--fg); text-decoration: none; }
+#prompt { left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); padding: 9px 16px; font: 600 14px/1.3 var(--body); white-space: nowrap; display: flex; gap: 8px; align-items: center; max-width: calc(100vw - 700px); overflow: hidden; }
+#prompt:empty { display: none; }
+#map { right: max(12px, env(safe-area-inset-right, 0px)); bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); padding: 6px; }
+#map canvas { display: block; width: 160px; height: 314px; }
+#countdown { position: fixed; inset: 0; display: grid; place-items: center; z-index: 8; pointer-events: none; font: 800 160px/1 var(--display); color: #fff; text-shadow: 0 6px 40px rgba(0,0,0,.6); }
+#countdown.go { color: var(--fuel); }
+
+/* ---------- screens ---------- */
+.screen { position: fixed; inset: 0; z-index: 20; overflow-y: auto; padding-block: 24px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.dim { background: rgba(5, 8, 12, 0.66); display: grid; place-items: center; }
+#settings { z-index: 25; }
+#menu { display: grid; grid-template-columns: minmax(0, 470px) minmax(0, 1fr) minmax(0, 330px); gap: 24px; align-items: start; background: linear-gradient(90deg, rgba(6,9,13,.92) 0, rgba(6,9,13,.55) 470px, rgba(6,9,13,0) 62%); }
+.menuPanel { display: grid; gap: 18px; padding-top: 4vh; }
+.eyebrow { font: 700 14px/1 var(--display); letter-spacing: .22em; text-transform: uppercase; color: var(--fuel); }
+.menuPanel h1 { margin: 0; font: 800 76px/0.88 var(--display); letter-spacing: -.01em; text-wrap: balance; }
+.menuPanel h1 span { display: block; font-size: 30px; letter-spacing: .02em; color: var(--muted); margin-top: 8px; font-weight: 700; }
+.sub { margin: 0; color: #c3ccd7; max-width: 46ch; }
+.play { display: grid; grid-template-columns: 1.4fr 1fr; gap: 10px; }
+.quick { display: grid; gap: 12px; padding: 14px; border-radius: 12px; background: var(--glass); border: 1px solid var(--line); }
+.q { display: grid; grid-template-columns: 110px 1fr; gap: 10px; align-items: center; }
+.q > span { font: 600 12px/1.2 var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.seg { display: flex; background: rgba(0,0,0,.35); border: 1px solid var(--line); border-radius: 8px; padding: 3px; gap: 3px; flex-wrap: wrap; }
+.seg button { flex: 1; font: 600 13px var(--body); color: var(--muted); background: transparent; border: 0; border-radius: 6px; padding: 7px 8px; cursor: pointer; white-space: nowrap; }
+.seg button:hover { color: var(--fg); }
+.seg button.on { background: #e8edf3; color: #0b0f14; }
+.seg[data-set="alliance"] button.on[data-val="blue"] { background: var(--blue); color: #fff; } .seg[data-set="alliance"] button.on[data-val="red"] { background: var(--red); color: #fff; }
+.padstat { grid-column: 2; font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.padstat .lamp { width: 8px; height: 8px; border-radius: 50%; background: #4b5563; flex: none; } .padstat.ok .lamp { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+.cheat { display: grid; grid-template-columns: auto 1fr; gap: 7px 14px; align-items: center; font-size: 13px; padding: 14px; border-radius: 12px; background: var(--glass); border: 1px solid var(--line); }
+.cheat .keys { display: flex; gap: 4px; justify-content: flex-end; flex-wrap: wrap; }
+.cheat h3 { grid-column: 1 / -1; margin: 0; font: 700 12px/1 var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.specPanel { grid-column: 3; padding: 16px; border-radius: 12px; background: var(--glass); border: 1px solid var(--line); margin-top: 4vh; display: grid; gap: 10px; }
+.specPanel h2, .card h2 { margin: 0; font: 700 14px/1 var(--display); letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+.spec { font-size: 12.5px; display: grid; gap: 0; margin: 0; }
+.spec div { display: grid; grid-template-columns: 5.6em 1fr; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.spec dt { color: var(--fuel); font: 700 12px/1.3 var(--display); letter-spacing: .1em; text-transform: uppercase; }
+.spec dd { margin: 0; }
+.card { background: var(--solid); border: 1px solid var(--line); border-radius: 14px; width: min(980px, 100%); padding: 22px 24px; display: grid; gap: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+.card h1 { margin: 0; font: 800 44px/0.95 var(--display); text-wrap: balance; }
+.between { justify-content: space-between; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.tabs button { font: 700 14px/1 var(--display); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); background: none; border: 0; border-bottom: 2px solid transparent; padding: 10px 12px; cursor: pointer; }
+.tabs button.on { color: var(--fg); border-color: var(--fuel); }
+.form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+.form label { display: grid; gap: 5px; font: 600 11px/1.2 var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.form select { font: 500 13px var(--body); color: var(--fg); background: #0b1117; border: 1px solid var(--line); border-radius: 7px; padding: 8px 9px; width: 100%; }
+.tablewrap { overflow-x: auto; }
+.bindtable { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.bindtable th { text-align: left; font: 600 11px/1.2 var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); padding: 5px 6px; border-bottom: 1px solid var(--line); }
+.bindtable td { padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.hintsm { display: block; font-size: 11px; color: var(--muted); }
+.bind { font: 600 12px var(--mono); color: var(--fg); background: #0b1117; border: 1px solid var(--line); border-radius: 6px; padding: 4px 9px; cursor: pointer; min-width: 80px; text-align: left; }
+.bind:hover { border-color: var(--line-hi); } .bind.live { border-color: var(--fuel); color: var(--fuel); } .bind.dup { border-color: var(--bad); color: var(--bad); }
+.fixed { font: 600 12px var(--mono); color: var(--muted); }
+.bindbar { margin-top: 10px; }
+.codebox { display: grid; gap: 6px; margin-top: 10px; }
+.codebox pre { margin: 0; max-height: 300px; overflow: auto; background: #070a0e; border: 1px solid var(--line); border-radius: 7px; padding: 10px; font: 12px/1.45 var(--mono); color: #cfe3f2; white-space: pre; }
+.res { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.res > * { min-width: 0; }
+.res table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.res td, .res th { padding: 5px 6px; border-bottom: 1px solid var(--line); text-align: right; font-variant-numeric: tabular-nums; }
+.res td:first-child, .res th:first-child { text-align: left; color: var(--muted); }
+.big { font: 800 56px/1 var(--display); }
+#loading { position: fixed; inset: 0; display: grid; place-items: center; z-index: 30; background: var(--bg); }
+#loading .ld { display: grid; gap: 10px; justify-items: center; }
+#loading .ldt { font: 800 34px/1 var(--display); letter-spacing: .08em; }
+#loading .ldb { font: 600 13px var(--body); color: var(--muted); }
+#loading .bar { width: 220px; height: 4px; border-radius: 2px; background: rgba(255,255,255,.08); overflow: hidden; }
+#loading .bar i { display: block; height: 100%; width: 40%; background: var(--fuel); animation: load 1.1s ease-in-out infinite; }
+@keyframes load { from { transform: translateX(-100%); } to { transform: translateX(260%); } }
+@media (max-width: 1100px) { #menu { grid-template-columns: minmax(0, 470px) minmax(0, 1fr); } .specPanel { grid-column: 1; margin-top: 0; } #prompt { max-width: calc(100vw - 32px); bottom: calc(env(safe-area-inset-bottom, 0px) + 200px); } }
+@media (max-width: 820px) {
+  #menu { grid-template-columns: minmax(0, 1fr); background: rgba(6,9,13,.82); } .menuPanel h1 { font-size: 54px; }
+  .res, .form { grid-template-columns: minmax(0, 1fr); } #feed { display: none; }
+  #robot { width: 220px; padding: 8px; gap: 6px; } .fuelnum { font-size: 32px; min-width: 52px; } .stats { grid-template-columns: 1fr; }
+  #map canvas { width: 92px; height: 180px; } #score .pts, #clock { font-size: 26px; } #zone { top: calc(env(safe-area-inset-top, 0px) + 70px); font-size: 11px; }
+  #countdown { font-size: 110px; }
+}
+@media (max-width: 480px) { .q { grid-template-columns: minmax(0, 1fr); } .padstat { grid-column: 1; } .play { grid-template-columns: minmax(0, 1fr); } .card { padding: 16px; } .card h1 { font-size: 30px; } #tl { max-width: 50vw; } }
+@media (prefers-reduced-motion: reduce) { #toasts div, #loading .bar i { animation: none; } }
+</style>
+
+<div id="view"></div>
+<div id="loading"><div class="ld"><div class="ldt">IRISH 2026 · BUILT</div><div class="ldb">Loading the Rev F robot CAD</div><div class="bar"><i></i></div></div></div>
+
+<div id="hud" hidden>
+  <div class="hud" id="tl"><button class="btn" id="bCam" type="button">Camera: Follow</button><button class="btn" id="bInput" type="button">Input: Keyboard</button><button class="btn" id="bPause" type="button">Pause</button></div>
+  <div class="hud" id="score">
+    <div class="cols3">
+      <div class="al blue"><span class="pts" id="sBlue">0</span><span class="sub" id="sBlueSub">FUEL 0</span></div>
+      <div class="mid"><div id="clock" class="mono">0:20</div><div id="period">AUTO</div></div>
+      <div class="al red"><span class="pts" id="sRed">0</span><span class="sub" id="sRedSub">FUEL 0</span></div>
+    </div>
+    <div class="pbar"><i id="pbar"></i></div>
+  </div>
+  <div class="hud panel" id="zone"><span class="chip" id="zoneChip">NEAR HALF</span><span id="zoneText">Score in your side of the HUB</span><span class="mono" id="zoneNext"></span></div>
+  <div class="hud" id="toasts"></div>
+  <div class="hud" id="feed"></div>
+  <div class="hud panel" id="robot">
+    <div class="head"><span>Rev F</span><span class="mono" id="rSpeed">0.0 ft/s</span></div>
+    <div class="fuelrow"><div class="fuelnum" id="rFuel">3<small>/10</small></div><div class="dots" id="rDots"></div></div>
+    <div class="stats">
+      <div class="st" id="stIntake"><i class="lamp"></i><div><b>Intake</b><span>Stowed</span></div></div>
+      <div class="st" id="stShooter"><i class="lamp"></i><div><b>Shooter</b><span>Idle</span></div></div>
+      <div class="st" id="stAim"><i class="lamp"></i><div><b>Aim</b><span>-</span></div></div>
+      <div class="st" id="stZone"><i class="lamp"></i><div><b>Zone</b><span>-</span></div></div>
+    </div>
+    <div class="drum"><i id="rDrum"></i><u id="rDrumT"></u></div>
+  </div>
+  <div class="hud panel" id="prompt"></div>
+  <div class="hud panel" id="map"><canvas id="mapc" width="320" height="628"></canvas></div>
+</div>
+<div id="countdown" hidden></div>
+
+<div class="screen" id="menu" hidden>
+  <div class="menuPanel">
+    <div class="eyebrow">IRISH 2026 · BUILT</div>
+    <h1>Driver Sim<span>Team robot Rev F, from the Onshape CAD</span></h1>
+    <p class="sub">A full BUILT match from the IRISH game manual: 0:20 AUTO, then 2:20 TELEOP where your ALLIANCE ZONE and side of the HUB swap every SHIFT.</p>
+    <div class="play"><button class="btn big primary" id="bPlay" type="button">Play match</button><button class="btn big" id="bPractice" type="button">Free practice</button></div>
+    <div class="quick">
+      <div class="q"><span>Play with</span><div class="seg" data-set="input"><button type="button" data-val="keyboard">Keyboard</button><button type="button" data-val="controller">Controller</button></div><div class="padstat" id="padStat"><i class="lamp"></i><span>No controller: plug one in and press any button</span></div></div>
+      <div class="q"><span>Alliance</span><div class="seg" data-set="alliance"><button type="button" data-val="blue">Blue</button><button type="button" data-val="red">Red</button></div></div>
+      <div class="q"><span>Other robots</span><div class="seg" data-set="ai"><button type="button" data-val="off">None</button><button type="button" data-val="easy">Easy</button><button type="button" data-val="normal">Normal</button><button type="button" data-val="hard">Hard</button></div></div>
+      <div class="q"><span>Driver assists</span><div class="seg" data-set="assists"><button type="button" data-val="on">On (auto-aim)</button><button type="button" data-val="off">Off (realistic)</button></div></div>
+    </div>
+    <div class="cheat" id="cheat"></div>
+    <div class="row"><button class="btn" id="bSettings" type="button">All settings</button><span class="note">Mouse wheel zooms the camera; drag to look around.</span></div>
+  </div>
+  <div class="specPanel"><h2>Rev F, from the CAD</h2><dl class="spec" id="spec"></dl></div>
+</div>
+
+<div class="screen dim" id="settings" hidden>
+  <div class="card">
+    <div class="row between"><h1>Settings</h1><button class="btn primary" id="bCloseSet" type="button">Done</button></div>
+    <div class="tabs" id="tabs"><button type="button" data-tab="game" class="on">Game</button><button type="button" data-tab="controls">Controls</button><button type="button" data-tab="robot">Robot</button><button type="button" data-tab="graphics">Graphics</button></div>
+    <div class="tab form" data-tab="game">
+      <label>Mode<select data-set="mode"><option value="match">Full match (2:40)</option><option value="practice">Free practice (shifts loop)</option></select></label>
+      <label>Alliance<select data-set="alliance"><option value="blue">Blue</option><option value="red">Red</option></select></label>
+      <label>Driver station<select data-set="station"><option value="1">Station 1 (left)</option><option value="2">Station 2 (right)</option></select></label>
+      <label>Start spot on the line<select data-set="start"><option value="center">Centre (facing HUB)</option><option value="left">Left</option><option value="right">Right</option></select></label>
+      <label>Auto routine<select data-set="auto"><option value="shoot-leave">Shoot preload + LEAVE</option><option value="shoot-depot">Shoot + DEPOT run</option><option value="leave">LEAVE only</option><option value="none">Do nothing</option><option value="manual">Drive it yourself (practice only)</option></select></label>
+      <label>Other robots<select data-set="ai"><option value="normal">AI: normal</option><option value="easy">AI: easy</option><option value="hard">AI: hard</option><option value="off">None (field to yourself)</option></select></label>
+      <label>Opponent defense<select data-set="defense"><option value="false">Off</option><option value="true">One opponent defends you</option></select></label>
+      <label>FUEL BONUS threshold<select data-set="fuelBonus"><option value="60">60 FUEL</option><option value="80">80 FUEL</option><option value="100">100 FUEL</option></select></label>
+    </div>
+    <div class="tab" data-tab="controls" hidden>
+      <div class="form">
+        <label>Play with<select data-set="input"><option value="keyboard">Keyboard</option><option value="controller">Controller</option></select></label>
+        <label>Driver assists<select data-set="assists"><option value="on">On: auto-aim, auto-stow, auto pre-spin</option><option value="off">Off: realistic</option></select></label>
+        <label>Controller drive<select data-set="drive"><option value="arcade">Arcade: left stick drive, right stick turn</option><option value="arcade1">One stick: left stick drives and turns</option><option value="tank">Tank: one stick per side</option></select></label>
+        <label>Turn sensitivity<select data-set="turnScale"><option value="0.65">Normal (65%)</option><option value="0.5">Gentle (50%)</option><option value="0.8">Quick (80%)</option><option value="1">Full</option></select></label>
+      </div>
+      <div id="ctl" style="margin-top:14px"></div>
+    </div>
+    <div class="tab form" data-tab="robot" hidden>
+      <label>Shooter RPM<select data-set="shotMode"><option value="vision">Vision: shot table by distance</option><option value="presets">Driver presets (1-4 / D-pad)</option></select></label>
+      <label>Feed only when the drum is ready<select data-set="gate"><option value="true">Yes (like robot code)</option><option value="false">No</option></select></label>
+      <label>Intake model<select data-set="intakeModel"><option value="cad">Team sim: needs 3 ft/s approach</option><option value="easy">Easy: touch it, own it</option></select></label>
+      <label>Hopper<select data-set="hopper"><option value="passive">Passive ramp (CAD: 1.5 FUEL/s)</option><option value="powered">Powered floor (what-if)</option></select></label>
+      <label>Shot scatter<select data-set="noise"><option value="real">Realistic</option><option value="none">None</option></select></label>
+    </div>
+    <div class="tab form" data-tab="graphics" hidden>
+      <label>Quality<select data-set="quality"><option value="high">High (soft shadows, crowd)</option><option value="medium">Medium</option><option value="low">Fast (no shadows)</option></select></label>
+      <label>Starting camera<select data-set="camera"><option value="follow">Follow the robot</option><option value="driver">Driver station (realistic)</option><option value="overhead">Overhead</option></select></label>
+      <label>Robot name tags<select data-set="labels"><option value="true">Show</option><option value="false">Hide</option></select></label>
+      <label>Sound<select data-set="sound"><option value="true">On</option><option value="false">Off</option></select></label>
+    </div>
+  </div>
+</div>
+
+<div class="screen dim" id="pause" hidden>
+  <div class="card" style="width:min(720px,100%)">
+    <h1>Paused</h1>
+    <div class="row"><button class="btn primary" id="bResume" type="button">Resume</button><button class="btn" id="bRestart" type="button">Restart</button><button class="btn" id="bSettings2" type="button">Settings</button><button class="btn" id="bQuit" type="button">Main menu</button></div>
+    <div class="cheat" id="cheat2"></div>
+  </div>
+</div>
+
+<div class="screen dim" id="results" hidden>
+  <div class="card">
+    <div class="row between" style="align-items:flex-end">
+      <div><h2>Match result</h2><div class="big" id="resHead">BLUE WINS</div></div>
+      <div class="row"><button class="btn primary" id="bAgain" type="button">Play again</button><button class="btn" id="bQuit2" type="button">Main menu</button></div>
+    </div>
+    <div class="res" id="resBody"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
+<script src="robot_mesh.js"></script>
+<script src="js/core.js"></script>
+<script src="js/robot.js"></script>
+<script src="js/fuel.js"></script>
+<script src="js/game.js"></script>
+<script src="js/controls.js"></script>
+<script src="js/main.js"></script>
