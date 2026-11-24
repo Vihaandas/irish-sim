@@ -46,7 +46,7 @@ Turn the assists off for realistic practice.
 |---|---|---|
 | Drive | W/S forward/back, A/D turn (or arrows) | Left stick drive, right stick turn (one-stick and tank in settings) |
 | Shoot (aims for you) | Space (hold) | RT (hold) |
-| Intake | E (hold) | LT (hold) |
+| Intake | E (press to lower, press again to raise) | LT (same) |
 | Outtake | Q (hold) | B (hold) |
 | Slow mode | Shift (hold) | LB (hold) |
 | Camera | C | View |

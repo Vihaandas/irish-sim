@@ -479,12 +479,14 @@
       const m = Math.max(1, Math.abs(l), Math.abs(r)); l /= m; r /= m;
     }
     inp.l = l; inp.r = r;
-    inp.intake = down('intake'); inp.shoot = down('shoot'); inp.outtake = down('outtake'); inp.stow = down('stow');
+    if (st.intakeMode === 'hold') { inp.intake = down('intake'); inp.intakeUp = false; }
+    else if (edge('intake') && (state === 'run' || state === 'countdown')) { inp.intake = !inp.intake; inp.intakeUp = !inp.intake; }
+    inp.shoot = down('shoot'); inp.outtake = down('outtake'); inp.stow = down('stow');
     if (edge('prespin')) inp.prespin = !inp.prespin;
     ['preset1', 'preset2', 'preset3', 'preset4'].forEach((id, i) => { if (edge(id)) inp.preset = i; });
     if (edge('camera') && state !== 'menu') cycleCamera();
     if (edge('pause') || e('KeyP')) togglePause();
-    if (state === 'run' && edge('reset') && S().mode !== 'match') { W.game.resetPlayer(); toast('Robot back on the STARTING LINE', 'info', 1.2); }
+    if (state === 'run' && edge('reset') && S().mode !== 'match') { W.game.resetPlayer(); inp.intake = inp.intakeUp = false; toast('Robot back on the STARTING LINE', 'info', 1.2); }
     if (state === 'run' && edge('refill') && S().mode === 'practice') { W.game.refillPlayer(10); toast('Loaded 10 FUEL', 'info', 1.0); }
     if (e('KeyM')) $('map').hidden = !$('map').hidden;
     if (state === 'menu' && $('settings').hidden && (pe.has(0) || pe.has(9))) startMatch('match');
@@ -614,8 +616,9 @@
     if (P.assist === 'aiming') return `${gl('shoot')} Aiming at the HUB…`;
     if (P.assist === 'spinning') return `${gl('shoot')} Spinning up the drum…`;
     if (n >= 10) return `${gl('shoot')} Hold to shoot: you are full`;
-    if (n > 0) return `${gl('shoot')} Hold to shoot${st.assists !== 'off' ? ' (aims for you)' : ''}&nbsp;&nbsp;·&nbsp;&nbsp;${gl('intake')} Intake more`;
-    return `${gl('intake')} Hold to intake: drive through FUEL at 3+ ft/s`;
+    if (n > 0) return `${gl('shoot')} Hold to shoot${st.assists !== 'off' ? ' (aims for you)' : ''}&nbsp;&nbsp;·&nbsp;&nbsp;${gl('intake')} ${st.intakeMode !== 'hold' && inp.intake ? 'Raise the intake' : 'Intake more'}`;
+    if (st.intakeMode !== 'hold' && inp.intake) return `Intake down: drive through FUEL at 3+ ft/s&nbsp;&nbsp;·&nbsp;&nbsp;${gl('intake')} Press to raise it`;
+    return `${gl('intake')} ${st.intakeMode === 'hold' ? 'Hold' : 'Press'} to intake: drive through FUEL at 3+ ft/s`;
   }
   // minimap: own ALLIANCE WALL at the bottom
   const mc = $('mapc'), mx = mc.getContext('2d');
@@ -682,7 +685,7 @@
     const drive = mode === 'controller'
       ? (S().drive === 'tank' ? `${Controls.stickGlyph('throttle')} ${Controls.stickGlyph('right')}` : S().drive === 'arcade1' ? '<span class="g gs">Left stick</span>' : `${Controls.stickGlyph('throttle')} <span class="note">drive</span> ${Controls.stickGlyph('turn')} <span class="note">turn</span>`)
       : '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <span class="note">or arrows</span>';
-    const rows = [['Drive', drive], [assists ? 'Shoot (aims for you)' : 'Shoot', gl('shoot')], ['Intake', gl('intake')], ['Outtake', gl('outtake')], ['Slow / precise', gl('slow')]];
+    const rows = [['Drive', drive], [assists ? 'Shoot (aims for you)' : 'Shoot', gl('shoot')], [S().intakeMode === 'hold' ? 'Intake (hold)' : 'Intake down / up (press)', gl('intake')], ['Outtake', gl('outtake')], ['Slow / precise', gl('slow')]];
     if (!assists) rows.push(['Stow intake', gl('stow')], ['Pre-spin drum', gl('prespin')]);
     rows.push(['Reset robot (practice, drills)', gl('reset')], ['Load 10 FUEL (practice)', gl('refill')]);
     rows.push(['Camera', gl('camera') + (mode === 'keyboard' ? ' <span class="note">wheel zooms</span>' : '')], ['Pause', gl('pause')]);
@@ -729,7 +732,7 @@
     Sound.init(); crowdBoost = 0; buildTimeline();
     cam.mode = S().camera || 'follow'; $('bCam').textContent = 'Camera: ' + CAM_NAMES[cam.mode];
     W.game.reset(); state = 'countdown'; rebuildRobots();
-    Object.assign(inp, { prespin: false, preset: 3 });
+    Object.assign(inp, { prespin: false, preset: 3, intake: false, intakeUp: false });
     const P = W.player; cam.yaw = P.th; cam.orbit = 0; cam.tilt = 0;
     camPos.set(P.x - Math.cos(P.th) * 3.5, 1.8, P.z - Math.sin(P.th) * 3.5); camLook.set(P.x, 0.3, P.z);
     cd = 3; goT = 0; showScreen(null); $('countdown').hidden = false; $('countdown').className = ''; $('cdNum').textContent = '3'; $('cdTip').textContent = tipText(); W.sfx('count');

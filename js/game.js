@@ -4,7 +4,7 @@ const DEFAULTS = {
   mode: 'match', alliance: 'blue', station: 1, start: 'center', ai: 'normal', defense: false,
   drive: 'arcade', shotMode: 'vision', gate: true, intakeModel: 'smooth', hopper: 'passive', noise: 'real',
   auto: 'shoot-leave', camera: 'follow', turnScale: 0.65, fuelBonus: 60, sound: true, quality: 'high',
-  input: 'keyboard', assists: 'on', labels: true, volume: 0.7, arc: true, trail: true, fps: false,
+  input: 'keyboard', assists: 'on', intakeMode: 'toggle', labels: true, volume: 0.7, arc: true, trail: true, fps: false,
 };
 const otherAlliance = a => a === 'blue' ? 'red' : 'blue';
 
@@ -469,7 +469,9 @@ function planCross(rb, ai, zs) {
 function playerAssist(W, P, inp, dt) {
   const g = W.game, on = W.settings.assists !== 'off';
   P.cmd.l = inp.l; P.cmd.r = inp.r; P.cmd.outtake = inp.outtake; P.cmd.shoot = inp.shoot; P.preset = inp.preset;
-  P.cmd.intake = inp.intake; P.cmd.stow = inp.stow; P.cmd.prespin = inp.prespin;
+  P.cmd.intake = inp.intake; P.cmd.prespin = inp.prespin;
+  // toggle mode: the second press raises the intake (with assists on, the auto-stow below waits until the module is clear)
+  P.cmd.stow = inp.stow || (!on && inp.intakeUp);
   P.assist = null; P.capLimit = on ? 10 : null;
   if (!on) { P.feedOk = null; return; }
   const n = P.count(), inZone = W.settings.mode !== 'match' || g.inZone(P);

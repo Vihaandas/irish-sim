@@ -8,7 +8,7 @@ const WPI_RAW_AXIS = [0, 1, 4, 5];   // browser axis index -> XboxController raw
 
 const CONTROL_ACTIONS = [
   { id: 'shoot', label: 'Shoot', hint: 'hold: aims at the HUB and fires', java: 'whileTrue(shooter.aimAndShoot())' },
-  { id: 'intake', label: 'Intake', hint: 'hold: deploys and runs', java: 'whileTrue(intake.deployAndRun())' },
+  { id: 'intake', label: 'Intake', hint: 'press: lowers and runs; press again: raises (or hold, in the setting above)', java: 'toggleOnTrue(intake.deployAndRun())', javaHold: 'whileTrue(intake.deployAndRun())' },
   { id: 'outtake', label: 'Outtake', hint: 'hold: reverses the intake (FUEL still in the module)', java: 'whileTrue(intake.outtake())' },
   { id: 'slow', label: 'Slow mode', hint: 'hold for fine driving', java: 'whileTrue(drive.slowMode())' },
   { id: 'stow', label: 'Stow intake', hint: 'automatic with assists on', java: 'onTrue(intake.stow())' },
@@ -167,14 +167,15 @@ const Controls = {
     for (const a of CONTROL_ACTIONS) {
       if (a.sim) continue;
       const t = trig(B.pad[a.id]);
-      lines.push(t ? `  ${t}.${a.java};   // ${a.label}` : `  // ${a.label}: not bound to a controller button`);
+      const j = S.intakeMode === 'hold' && a.javaHold ? a.javaHold : a.java;
+      lines.push(t ? `  ${t}.${j};   // ${a.label}` : `  // ${a.label}: not bound to a controller button`);
     }
     lines.push('}');
     if (S.assists !== 'off') lines.push('', '// Driver assists the sim used (aimAndShoot / deployAndRun should do the same):',
       '//  - Shoot: turn to the HUB AprilTags (IDs 9/10/25/26), set drum rpm from the shot table by distance,',
       '//    feed only when aimed within 2 deg, moving under 1.1 ft/s and inside our ALLIANCE ZONE (G407).',
       '//  - Pre-spin the drum whenever we hold FUEL inside our ALLIANCE ZONE.',
-      '//  - Stow the intake 0.45 s after the intake button is released (it jams on the BUMP when deployed).',
+      '//  - Stow the intake 0.45 s after it is switched off (it jams on the BUMP when deployed).',
       '//  - Stop the intake rollers at 10 FUEL (G408).');
     const simOnly = CONTROL_ACTIONS.filter(a => a.sim).map(a => `${a.label} = ${this.padName(B.pad[a.id])}`).join(', ');
     lines.push('', `// Sim-only buttons: ${simOnly}.`);
