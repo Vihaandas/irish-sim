@@ -19,7 +19,7 @@ const IRISH = {
   // intake: team 22 in module on IN-70 pivot arms, pivot (Y 31.0, Z 8.8), folds 132.5 deg (CAD), deploy NEO + MAXPlanetary 25:1
   intake: { pivotY: 31.0, pivotZ: 8.8, stowDeg: 132.5, tipY: 44.19, deployTime: 0.35, transit: 0.47, minApproach: 0.76, slowCaptureRate: 3.0 },
   // passive ramp hopper (analysis/sim_hopper.js): 10 FUEL drain in 6.17 s = 1.53 FUEL/s; ~2-3 preload with the arm folded
-  hopper: { passiveInterval: 6.17 / 10 * 1.0, poweredInterval: 0.16, lanes: 2, physicalMax: 14, preload: 3 },
+  hopper: { passiveInterval: 6.17 / 10 * 1.0, poweredInterval: 0.16, lanes: 2, physicalMax: 14, preload: 10 },
   // simple 2-wide shooter: fixed 72 deg hood, exit (lane X +-3.19, Y 4.47, Z 16.22), 4 in Colson drum (R 2 in), exit ratio 0.55,
   // drum J 31.4 lb-in^2 on a NEO (60 A), 6-8 FUEL/s feed, 1.58% speed drop per shot (shooter/analysis/simple.js)
   shooter: { exitX: 3.19, exitY: 4.47, exitZ: 16.22, launchDeg: 72, Rw: 2 * IN, kExit: 0.55, J: 31.4 * LB * IN * IN, Ts: 2.6, wf: 5676 * 2 * Math.PI / 60, Ilim: 60, Is: 105, feedBPS: 7, drop: 0.0158, fireTime: 0.1 },

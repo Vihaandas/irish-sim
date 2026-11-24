@@ -3,7 +3,7 @@
 const DEFAULTS = {
   mode: 'match', alliance: 'blue', station: 1, start: 'center', ai: 'normal', defense: false,
   drive: 'arcade', shotMode: 'vision', gate: true, intakeModel: 'smooth', hopper: 'passive', noise: 'real',
-  auto: 'shoot-leave', camera: 'follow', turnScale: 0.65, fuelBonus: 60, sound: true, quality: 'high',
+  auto: 'shoot-depot', camera: 'follow', turnScale: 0.65, fuelBonus: 60, sound: true, quality: 'high',
   input: 'keyboard', assists: 'on', intakeMode: 'toggle', labels: true, volume: 0.7, arc: true, trail: true, fps: false,
 };
 const otherAlliance = a => a === 'blue' ? 'red' : 'blue';
@@ -341,15 +341,29 @@ function makeAuto(name) {
   const hubAim = rb => { const e = rb.toWorld(0, IRISH.shooter.exitY, IRISH.shooter.exitZ); return wrapAng(Math.atan2(HUB.cz - e[2], HUB.cx - e[0]) - rb.th); };
   const fwd = (dist) => ({ name: 'drive', init(rb) { this.tx = rb.x + rb.fx * dist; this.tz = rb.z + rb.fz * dist; }, run(rb) { return driveToward(rb, this.tx, this.tz, 0.55, 0.0) < 0.06; } });
   const aim = { name: 'aim', run(rb) { const e = hubAim(rb); let turn = clamp(e * 2.2 - rb.w * 0.3, -0.5, 0.5); if (Math.abs(e) > 0.012) turn = Math.sign(turn) * Math.max(Math.abs(turn), 0.29); rb.cmd.l = turn; rb.cmd.r = -turn; return Math.abs(e) < 1.2 * DEG && Math.abs(rb.w) < 0.1; } };
-  const shootAll = (maxT = 9) => ({ name: 'shoot', init() { this.t = 0; }, run(rb, W, dt) { this.t += dt; stopDrive(rb); const e = hubAim(rb); let turn = clamp(e * 2.0, -0.3, 0.3); if (Math.abs(e) > 0.02) turn = Math.sign(turn) * Math.max(Math.abs(turn), 0.28); else turn = 0; rb.cmd.l = turn; rb.cmd.r = -turn; rb.cmd.shoot = true; const done = rb.count() === 0 || this.t > maxT; if (done) rb.cmd.shoot = false; return done; } });
+  // shooting stops 0.1 s before AUTO ends so nothing is launched while the robots are disabled
+  const AUTO_END = MATCH.periods[0].t1 - 0.1;
+  const shootAll = (maxT = 9) => ({ name: 'shoot', init() { this.t = 0; }, run(rb, W, dt) { this.t += dt; stopDrive(rb); const e = hubAim(rb); let turn = clamp(e * 2.0, -0.3, 0.3); if (Math.abs(e) > 0.02) turn = Math.sign(turn) * Math.max(Math.abs(turn), 0.28); else turn = 0; rb.cmd.l = turn; rb.cmd.r = -turn; rb.cmd.shoot = true; const done = rb.count() === 0 || this.t > maxT || W.t > AUTO_END; if (done) rb.cmd.shoot = false; return done; } });
   const spin = { name: 'spin', run(rb) { rb.cmd.prespin = true; return true; } };
-  const goTo = (fx, fz, opts = {}) => ({ name: 'goto', run(rb, W) { const s = W.settings.alliance === 'blue' ? 1 : -1; const tx = s > 0 ? fx : FIELD.L - fx; if (opts.intake && rb.count() < 10) rb.cmd.intake = true; return driveToward(rb, tx, fz, opts.v || 0.7, 0.0) < (opts.tol || 0.15); } });
+  // opts: intake (run the intake), v (max speed), tol (arrive distance), full (finish once holding 10), by (finish at this match time regardless)
+  const goTo = (fx, fz, opts = {}) => ({ name: 'goto', run(rb, W) {
+    const s = W.settings.alliance === 'blue' ? 1 : -1; const tx = s > 0 ? fx : FIELD.L - fx;
+    if (opts.full && rb.count() >= 10) return true;
+    if (opts.by && W.t > opts.by) return true;
+    if (opts.intake && rb.count() < 10) rb.cmd.intake = true;
+    return driveToward(rb, tx, fz, opts.v || 0.7, 0.0) < (opts.tol || 0.15);
+  } });
   const stow = { name: 'stow', run(rb) { rb.cmd.intake = false; rb.cmd.stow = true; return true; } };
   const routines = {
     'none': [],
     'leave': [fwd(1.0)],
     'shoot-leave': [spin, fwd(1.0), aim, shootAll()],
-    'shoot-depot': [spin, fwd(0.75), aim, shootAll(4.5), goTo(2.2, CZ, { v: 0.75 }), goTo(0.95, CZ, { intake: true, v: 0.5, tol: 0.12 }), goTo(0.75, CZ - 0.45, { intake: true, v: 0.35 }), goTo(0.75, CZ + 0.45, { intake: true, v: 0.35 }), stow, goTo(5.4, CZ, { v: 0.8, tol: 0.1 }), aim, shootAll()],
+    // 10 preloaded: shoot them all from just past the line (LEAVE), refill at our DEPOT, come back and shoot until AUTO ends.
+    // The DEPOT steps give up at 12.5 s so there is always time to drive back and shoot.
+    'shoot-depot': [spin, fwd(0.75), aim, shootAll(7.5),
+      goTo(2.2, CZ, { v: 0.85 }), goTo(0.95, CZ, { intake: true, v: 0.5, tol: 0.12, full: true, by: 12.5 }),
+      goTo(0.75, CZ - 0.45, { intake: true, v: 0.35, full: true, by: 12.5 }), goTo(0.75, CZ + 0.45, { intake: true, v: 0.35, full: true, by: 12.5 }),
+      stow, goTo(5.0, CZ, { v: 0.85, tol: 0.1 }), aim, shootAll()],
   };
   const steps = (routines[name] || []).map(s => Object.assign(Object.create(s), {}));
   return { name, steps, i: 0, started: false };
@@ -357,6 +371,7 @@ function makeAuto(name) {
 function runAuto(W, rb, dt) {
   const A = W.game.autoRun; if (!A) return;
   rb.cmd.l = rb.cmd.r = 0; rb.cmd.shoot = false; rb.cmd.intake = false; rb.cmd.stow = false;
+  rb.capLimit = 10;   // the auto's intake code stops at 10 FUEL (G408), like the teleop assist
   const s = A.steps[A.i]; if (!s) { stopDrive(rb); return; }
   if (!s._init) { s._init = true; s.init && s.init(rb); }
   if (s.run(rb, W, dt)) { A.i++; stopDrive(rb); }

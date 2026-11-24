@@ -76,6 +76,17 @@ Turn the assists off for realistic practice.
   - G408: more than 10 FUEL, plus one more each 3 s.
   - G420: contacting a protected robot at its HUB wall. The robot that drove in is charged (G210).
 
+## Auto plan
+
+The default auto is "Shoot 10 + DEPOT refill + shoot 10". The robot starts with 10 FUEL preloaded.
+
+1. Pre-spin the drum and drive 0.75 m forward, off the STARTING LINE, for LEAVE.
+2. Aim at the HUB and shoot all 10 preloaded FUEL. The ramp feeds about 1.5 FUEL/s, so the hopper is empty at about 6.8 s.
+3. Turn around, drive to our DEPOT with the intake down and take FUEL until the robot holds 10 (about 10 s). If it isn't full by 12.5 s, it leaves anyway.
+4. Stow the intake, drive back to 5.0 m from our wall, aim and shoot. Shooting stops 0.1 s before AUTO ends.
+
+The test (`tools/auto_matrix.js`): both alliances, all 3 start spots and AI off, normal and hard, 3 runs each (54 runs). Every run took 20 shots, scored 18.2 on average (15 to 20), got LEAVE, and drew no fouls. The last shot was at about 18.5 s. "Shoot 10 + LEAVE" scores about 9 and is done by 6.7 s, so it is the fallback if the DEPOT run is blocked.
+
 ## The robot, from the CAD and analysis files
 
 - **Mesh:** Onshape "Robot Rev E - deployed" and "stowed (start configuration)", both Rev F with the wood intake and wood shooter (exported 2026-11-23, 989 parts).
@@ -114,7 +125,7 @@ Turn the assists off for realistic practice.
   - The pickup, kicker and transfer roller shafts are split out of the CAD mesh and spin in the right direction while intaking.
   - Outtake only reaches FUEL still in the module, because the ramp slopes away from the intake on the real robot.
   - With assists on, the intake waits until the module is clear before stowing.
-- **Hopper:** passive ramp, one FUEL every 0.62 s to the two shooter lanes (analysis/sim_hopper.js: 10 in 6.17 s). It preloads 3 FUEL with the arm folded. A "powered floor" option shows the proposed upgrade.
+- **Hopper:** passive ramp, one FUEL every 0.62 s to the two shooter lanes (analysis/sim_hopper.js: 10 in 6.17 s). It starts with 10 FUEL preloaded (the preload limit). A "powered floor" option shows the proposed upgrade.
 - **Shooter:**
   - Fixed 72 deg hood. FUEL leaves at lane X +-3.19, Y 4.47, Z 16.22 in.
   - Drum: 4 in Colson, exit-speed ratio 0.55, 31.4 lb-in^2 on a NEO at 60 A. It spins up from rest in about 2.5 s.
@@ -139,4 +150,4 @@ Turn the assists off for realistic practice.
 - `js/core.js`: field and colliders. `js/robot.js`: robot specs and drive. `js/fuel.js`: FUEL physics. `js/game.js`: rules, autos and AI. `js/controls.js`: remappable bindings and the WPILib snippet. `js/main.js`: graphics, input and HUD.
 - `tools/build_mesh.js` turns the two Onshape glTF exports in `raw/` into `robot_mesh.js`. Re-export after a CAD change: GET `/api/v6/partstudios/d/{did}/w/{wid}/e/{eid}/gltf` from the signed-in Onshape tab, then run `node tools/build_mesh.js`.
 - `raw/*.gltf` are the 117 MB exports. They can be deleted once `robot_mesh.js` is built.
-- `tools/headless_test.js` checks top speed, spin-up, shots at 0-16 ft and two full AI matches without graphics. `tools/trace_auto.js <auto>` prints an AUTO step by step.
+- `tools/headless_test.js` checks top speed, spin-up, shots at 0-16 ft and two full AI matches without graphics. `tools/trace_auto.js <auto>` prints an AUTO step by step. `tools/auto_matrix.js . <autos> <runs>` runs autos across alliances, start spots and AI levels.

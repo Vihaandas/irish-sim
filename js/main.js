@@ -7,6 +7,8 @@
   W.game = new Game(W);
   window.SIM = W;
   try { Object.assign(W.settings, JSON.parse(localStorage.getItem(SET_KEY) || '{}')); } catch (e) { /* storage blocked */ }
+  // 2026-11-24: 10 FUEL preload; move everyone once onto the new default auto (10 + DEPOT + 10)
+  if (W.settings.autoV !== 2) { W.settings.auto = DEFAULTS.auto; W.settings.autoV = 2; }
   const S = () => W.settings;
   const COL = { blue: 0x3b82f6, red: 0xef4444, fuel: 0xf6c443 };
   const col = hex => new THREE.Color(hex).convertSRGBToLinear();
@@ -717,7 +719,7 @@
       ['Weight', `${IRISH.massLb.toFixed(0)} lb with battery and bumpers`],
       ['Drive', '4 CIM, Toughbox Mini 10.71:1 (from the CAD gears), 6 in HiGrip: about 10 ft/s on the field, turns about 350°/s in place'],
       ['Intake', 'Team 22 in module with wood plates on 12 mm birch towers, NEO + 25:1 pivot; needs about 3 ft/s approach'],
-      ['Hopper', 'Passive 1/4 in plywood ramp: about 1.5 FUEL/s to the shooter; 3 FUEL preload'],
+      ['Hopper', 'Passive 1/4 in plywood ramp: about 1.5 FUEL/s to the shooter; 10 FUEL preload (the limit)'],
       ['Shooter', '2-wide drum in 12 mm birch plates, fixed 72° hood: 2,085 rpm at the HUB wall to 3,438 rpm at 10 ft'],
     ];
     $('spec').innerHTML = rows.map(([a, b]) => `<div><dt>${a}</dt><dd>${b}</dd></div>`).join('');
