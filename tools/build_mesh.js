@@ -79,7 +79,7 @@ for (const p of dep) {
 const avg = angles.reduce((s, x) => s + x, 0) / (angles.length || 1);
 console.log('moving', moving, 'rigid about pivot', rigid, 'angle avg', avg.toFixed(2), 'min', Math.min(...angles).toFixed(2), 'max', Math.max(...angles).toFixed(2));
 console.log('non-rigid movers (kept at deployed pose):', nonrigid.slice(0, 40));
-console.log('missing in stowed', dep.filter(p => p.missing).length, 'topology differs', dep.filter(p => p.diffTopo).map(p => p.name).slice(0, 20));
+console.log('missing in stowed', dep.filter(p => p.missing).length, dep.filter(p => p.missing).map(p => p.name).slice(0, 60), 'topology differs', dep.filter(p => p.diffTopo).map(p => p.name).slice(0, 20));
 
 // decimate by vertex clustering (per part), in inches
 function cluster(pos, idx, cell) {
@@ -113,7 +113,7 @@ for (const p of dep) {
   const cy = (b[1] + b[4]) / 2 / IN, cz = (b[2] + b[5]) / 2 / IN;
   let ax = spinAxes.find(a => Math.hypot(a.y - cy, a.z - cz) < 0.3);
   if (!ax) spinAxes.push(ax = { y: cy, z: cz, r: 0, n: 0, names: new Set() });
-  ax.n++; ax.r = Math.max(ax.r, dy / 2); ax.names.add(p.name.replace(/_d+$/, ''));
+  ax.n++; ax.r = Math.max(ax.r, dy / 2); ax.names.add(p.name.replace(/_\d+$/, ''));
   p.spinAxis = spinAxes.indexOf(ax);
 }
 // keep real roller axes (r >= 0.5 in); small parts (hub screws) join the roller they sit on; motor shafts etc. stay static

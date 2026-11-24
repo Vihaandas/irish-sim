@@ -215,7 +215,7 @@
     const buf = bytes.buffer, parts = []; let maxX = 0;
     for (const c of h.chunks) {
       const q = new Uint16Array(buf, c.pOff, c.nv * 3), ix = new Uint16Array(buf, c.iOff, c.ni), pos = new Float32Array(c.nv * 3);
-      const spin = /^spind+$/.test(c.group) ? h.spinAxes[+c.group.slice(4)] : null, isIn = c.group === 'intake' || !!spin;
+      const spin = /^spin\d+$/.test(c.group) ? h.spinAxes[+c.group.slice(4)] : null, isIn = c.group === 'intake' || !!spin;
       const oy = spin ? spin.y : h.pivot.y, oz = spin ? spin.z : h.pivot.z;
       for (let i = 0; i < c.nv; i++) {
         const X = h.min[0] + q[i * 3] / 65535 * h.span[0], Y = h.min[1] + q[i * 3 + 1] / 65535 * h.span[1], Z = h.min[2] + q[i * 3 + 2] / 65535 * h.span[2];
@@ -252,7 +252,7 @@
     const spinners = (IRISH.spin || []).map(a => { const g = new THREE.Group(); g.position.set((a.y - h.pivot.y) * IN, (a.z - h.pivot.z) * IN, 0); pivot.add(g); return { g, dir: a.dir, r: a.r }; });
     for (const { g, c, mat } of irishTemplate) {
       const mesh = new THREE.Mesh(g, c.group === 'bumper' ? noodle : mat); mesh.castShadow = true; mesh.receiveShadow = S().quality === 'high';
-      const sp = /^spind+$/.test(c.group) ? spinners[+c.group.slice(4)] : null;
+      const sp = /^spin\d+$/.test(c.group) ? spinners[+c.group.slice(4)] : null;
       (sp ? sp.g : c.group === 'intake' ? pivot : root).add(mesh);
     }
     const you = labelSprite('YOU', rb.alliance, 0.5); you.position.set(0, 0.95, 0); root.add(you);
