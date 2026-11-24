@@ -78,9 +78,9 @@ Turn the assists off for realistic practice.
 
 ## The robot, from the CAD and analysis files
 
-- **Mesh:** Onshape "Robot Rev E - deployed" and "stowed (start configuration)", both Rev F.
+- **Mesh:** Onshape "Robot Rev E - deployed" and "stowed (start configuration)", both Rev F with the wood intake and wood shooter (exported 2026-11-23, 989 parts).
   - 940 parts, decimated from 3.19 M to 0.2 M triangles.
-  - The 186 parts that move between the two poses are fitted as one rigid rotation of 132.5 deg about the intake pivot (Y 31.0, Z 8.8).
+  - The 165 parts that move between the two poses are fitted as one rigid rotation of 132.5 deg about the intake pivot (Y 31.0, Z 8.8).
   - The pool-noodle bumpers are recoloured for the alliance. Their outline is the collision box.
   - The REF FUEL in the CAD hopper are the slots where carried FUEL are drawn.
 - **Drive:**

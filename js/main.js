@@ -20,7 +20,7 @@
   $('view').appendChild(renderer.domElement);
   const scene = new THREE.Scene(); scene.background = col(0x0f141b); scene.fog = new THREE.Fog(col(0x0f141b), 32, 80);
   const camera = new THREE.PerspectiveCamera(60, 1, 0.05, 300);
-  const resize = () => { const w = window.innerWidth, h = window.innerHeight; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); };
+  const resize = () => { const w = window.FILM_W || window.innerWidth, h = window.FILM_H || window.innerHeight; renderer.setSize(w, h, !window.FILM_MODE); camera.aspect = w / h; camera.updateProjectionMatrix(); };
   window.addEventListener('resize', resize); resize();
   const maxAniso = renderer.capabilities.getMaxAnisotropy();
   (function buildEnvironment() {
@@ -713,9 +713,9 @@
       ['Size', `AM14U5 ${IRISH.frame.L} x ${IRISH.frame.W} in frame; ${(2 * IRISH.hl / IN).toFixed(1)} x ${(2 * IRISH.hw / IN).toFixed(1)} in with noodle bumpers; ${IRISH.topIn} in tall`],
       ['Weight', `${IRISH.massLb.toFixed(0)} lb with battery and bumpers`],
       ['Drive', '4 CIM, Toughbox Mini 10.71:1 (from the CAD gears), 6 in HiGrip: about 10 ft/s on the field, turns about 350°/s in place'],
-      ['Intake', 'Team 22 in module on a NEO + 25:1 pivot; needs about 3 ft/s approach'],
-      ['Hopper', 'Passive ramp: about 1.5 FUEL/s to the shooter; 3 FUEL preload'],
-      ['Shooter', '2-wide drum, fixed 72° hood: 2,085 rpm at the HUB wall to 3,438 rpm at 10 ft'],
+      ['Intake', 'Team 22 in module with wood plates on 12 mm birch towers, NEO + 25:1 pivot; needs about 3 ft/s approach'],
+      ['Hopper', 'Passive 1/4 in plywood ramp: about 1.5 FUEL/s to the shooter; 3 FUEL preload'],
+      ['Shooter', '2-wide drum in 12 mm birch plates, fixed 72° hood: 2,085 rpm at the HUB wall to 3,438 rpm at 10 ft'],
     ];
     $('spec').innerHTML = rows.map(([a, b]) => `<div><dt>${a}</dt><dd>${b}</dd></div>`).join('');
   }
@@ -830,7 +830,17 @@
     const hit = v0 - Math.hypot(P.vx, P.vz); if (hit > 1.0) { cam.shake = Math.min(0.08, hit * 0.03); rumble(0.6, 0.35, 140); Sound.clank(hit); }
     fuelStep(W, dt / 2); fuelStep(W, dt / 2);
   }
+  function poseRobots(dt) {
+    for (const [rb, v] of robotVis) {
+      v.position.set(rb.x, rb.y, rb.z); v.rotation.set(0, -rb.th, rb.pitch);
+      if (v.userData.pivot) v.userData.pivot.rotation.z = rb.intakePos * IRISH.intake.stowDeg * DEG;
+      if (v.userData.roller && rb.rollers > 0) v.userData.roller.rotation.y += dt * 30;
+      if (v.userData.spinners && rb.rollers) for (const s of v.userData.spinners) s.g.rotation.z += s.dir * Math.sign(rb.rollers) * dt * 2.2 / Math.max(0.6, s.r);
+      if (v.userData.fly && rb.cmd.shoot) v.userData.fly.rotation.y += dt * 60;
+    }
+  }
   function frame(now) {
+    if (window.FILM_MODE) return;
     const dt = clamp((now - last) / 1000, 0, 0.05); last = Math.max(last, now);
     pollInput(dt);
     if (state === 'countdown') {
@@ -854,13 +864,7 @@
       if (P.jam && !lastJam && state === 'run') Sound.jam(); lastJam = P.jam;
       crowdBoost *= Math.exp(-dt * 0.6);
       Sound.update({ active: state === 'run' || state === 'countdown', speed: Math.hypot(P.vx, P.vz), effort: (Math.abs(P.cmd.l) + Math.abs(P.cmd.r)) / 2, drumRpm: P.drumW * 60 / (2 * Math.PI), rollers: P.rollers, crowd: state === 'menu' || state === 'loading' ? 0.006 : 0.016 + 0.03 * crowdBoost });
-      for (const [rb, v] of robotVis) {
-        v.position.set(rb.x, rb.y, rb.z); v.rotation.set(0, -rb.th, rb.pitch);
-        if (v.userData.pivot) v.userData.pivot.rotation.z = rb.intakePos * IRISH.intake.stowDeg * DEG;
-        if (v.userData.roller && rb.rollers > 0) v.userData.roller.rotation.y += dt * 30;
-        if (v.userData.spinners && rb.rollers) for (const s of v.userData.spinners) s.g.rotation.z += s.dir * Math.sign(rb.rollers) * dt * 2.2 / Math.max(0.6, s.r);
-        if (v.userData.fly && rb.cmd.shoot) v.userData.fly.rotation.y += dt * 60;
-      }
+      poseRobots(dt);
       const tgt = state === 'run' ? arrowTarget(P) : null;
       arrow.visible = !!tgt;
       if (tgt) { arrow.position.set(P.x, P.y + 1.15 + 0.05 * Math.sin(now / 160), P.z); arrow.rotation.y = -Math.atan2(tgt[1] - P.z, tgt[0] - P.x); }
@@ -872,6 +876,14 @@
     for (const [r, x, z, th, y, pitch] of saved) { r.x = x; r.z = z; r.th = th; r.y = y; r.pitch = pitch; }
     requestAnimationFrame(frame);
   }
+  // deterministic hooks for the video renderer (robot/video/film.html sets window.FILM_MODE before loading)
+  W._film = {
+    THREE, renderer, scene, camera, cam, inp, mats, TEX, col, sun, fill, robotVis, hubLed, buildIrish, canvasTex, fuelMesh, physics, burst,
+    start(mode) { setSetting('mode', mode); W.game.reset(); rebuildRobots(); state = 'run'; cam.mode = 'free'; showScreen(null); $('countdown').hidden = true; },
+    step(dt) { const n = Math.max(1, Math.round(dt / DT)); for (let i = 0; i < n; i++) physics(DT); },
+    visuals(dt) { poseRobots(dt); fuelDt = dt; drawFuel(); stepFx(dt); stepTrails(); },
+    rebuild: rebuildRobots, setState: s => { state = s; }, alpha: a => { renderAlpha = a; }, DT,
+  };
   W._dbg = { physics, render: () => renderer.render(scene, camera), renderer, scene, camera, cam, inp, start: m => startMatch(m), poll: dt => pollInput(dt), hud: () => { hudT = 0; updateHud(1); drawFuel(); updateCamera(1); }, frame: t => frame(t), state: () => state, setSetting, openSettings, toMenu };
 
   // ---------------- boot ----------------

@@ -6,7 +6,7 @@ const LB = 0.4536;
 const IRISH = {
   name: 'IRISH Rev F',
   // robot/analysis/weight.js (Rev F): 103.8 lb CAD + 2.5 wire + 13.2 battery + 12.4 bumpers
-  massLb: 103.8 + 2.5 + 13.2 + 12.4,
+  massLb: 106.1 + 13.2 + 12.4,     // analysis/weight.json, wood revision 2026-11-23: robot + battery + bumpers
   // bumper outline from the CAD bumpers (BP-*), robot frame inches: X +-18.75, Y -3.23..35.56
   bumper: { x: 18.75, y0: -3.231, y1: 35.56, zTop: 7.5 },
   frame: { L: 32.31, W: 31.0 },
